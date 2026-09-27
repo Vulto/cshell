@@ -80,7 +80,39 @@ jobs:
           grep -qx 'command-variable-ok' /tmp/cs-example-output
 
           run_example examples/redirection.cs
-          grep -qx 'redirect-ok' /tmp/cs-example-output
+          test "$(cat /tmp/cs-example-output)" = 
+
+          run_example examples/pipe.cs
+          grep -qx '3' /tmp/cs-example-output
+
+          run_example examples/glob.cs
+          grep -q 'examples/array.cs' /tmp/cs-example-output
+
+          run_example examples/command_substitution.cs
+          grep -qx 'substituted' /tmp/cs-example-output
+
+          run_example examples/background.cs
+          grep -q 'Running' /tmp/cs-example-output
+
+          run_example examples/alias_history.cs
+          grep -q 'alias-ok' /tmp/cs-example-output
+
+          run_example examples/functions_return.cs
+          grep -qx 'returned' /tmp/cs-example-output
+
+          run_example examples/cd_exit.cs
+          grep -qx '/tmp' /tmp/cs-example-output
+
+          run_example examples/unset.cs
+          grep -qx 'present' /tmp/cs-example-output
+          grep -qx '0' /tmp/cs-example-output
+
+          set +e
+          ./cs examples/exit.cs > /tmp/cs-example-output
+          exit_status=$?
+          set -e
+          test "$exit_status" -eq 7
+first\nsecond\nerror'
 
           run_example examples/pipe.cs
           grep -qx '3' /tmp/cs-example-output
