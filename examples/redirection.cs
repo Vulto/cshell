@@ -1,2 +1,5 @@
-echo "redirect-ok" > "/tmp/cs-example-redirection"
-cat /tmp/cs-example-redirection
+echo "first" > "/tmp/cs-example-redirection"
+echo "second" >> "/tmp/cs-example-redirection"
+cat < "/tmp/cs-example-redirection"
+sh -c "printf error >&2" 2> "/tmp/cs-example-redirection-error"
+cat "/tmp/cs-example-redirection-error"
