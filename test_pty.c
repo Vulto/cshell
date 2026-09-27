@@ -12,7 +12,7 @@ int main(void){alarm(8);
  if(p==0){execl("./cs","./cs",(char*)NULL);_exit(127);}
  char buf[8192]={0};size_t n=0;
  const char *cmd="ech\t\"pty-ok\"\nexit\n";
- struct timespec ts={0,200000000};nanosleep(&ts,NULL);write(master,cmd,strlen(cmd));
+ for(;;){ssize_t r=read(master,buf+n,sizeof(buf)-1-n);if(r<=0)return 1;n+=(size_t)r;buf[n]=0;if(strstr(buf,"cs> "))break;}write(master,cmd,strlen(cmd));
  for(;;){ssize_t r=read(master,buf+n,sizeof(buf)-1-n);if(r<=0)break;n+=(size_t)r;buf[n]=0;if(strstr(buf,"pty-ok"))break;}
  int st;waitpid(p,&st,0);return WIFEXITED(st)&&WEXITSTATUS(st)==0&&strstr(buf,"pty-ok")?0:1;
 }
