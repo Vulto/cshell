@@ -81,7 +81,7 @@ static Expr *Primary(Parser*p){
  if(Is(p,T_NUM)){Expr*e=ENew(E_NUM,q);e->u.n=p->t.n;Bump(p);return e;}
  if(Is(p,T_STR)){Expr*e=ENew(E_STR,q);e->u.s=p->t.s;p->t.s=NULL;Bump(p);return e;}
  if(Is(p,T_ID)){Expr*e=ENew(E_VAR,q);e->u.name=p->t.s;p->t.s=NULL;Bump(p);return e;}
- if(Is(p,T_DOLLAR)){Bump(p);Expr*e=ENew(E_ENV,q);if(!Is(p,T_ID)&&!Is(p,T_QMARK))Fatal(q,"expected environment variable name after '
+ if(Is(p,T_DOLLAR)){Bump(p);Expr*e=ENew(E_ENV,q);if(!Is(p,T_ID)&&!Is(p,T_QMARK))Fatal(q,"expected environment variable name after environment marker");if(Is(p,T_QMARK))e->u.name=Dup("?");else{e->u.name=p->t.s;p->t.s=NULL;}Bump(p);return e;}
  if(Is(p,T_LP)){Bump(p);Expr*e=ParseExpr(p);Need(p,T_RP,"')'");return e;}
  Fatal(q,"expected expression");return NULL;}
 static Expr *Unary(Parser*p){Pos q=p->t.p;if(Is(p,T_INC)){Bump(p);if(!Is(p,T_ID))Fatal(q,"expected variable after ++");Expr*e=ENew(E_INC,q);e->u.inc.name=p->t.s;p->t.s=NULL;Bump(p);return e;}if(Is(p,T_NOT)||Is(p,T_MINUS)){Kind k=p->t.k;Bump(p);Expr*e=ENew(E_UNARY,q);e->u.unary.op=(int)k;e->u.unary.a=Unary(p);return e;}return Primary(p);}
