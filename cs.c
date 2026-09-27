@@ -439,7 +439,7 @@ static char *PathCompletion(const char *prefix, char quote)
     size_t count = 0;
     for (size_t i = 0; i < g.gl_pathc; ++i) {
         const char *path = g.gl_pathv[i];
-        if (!quote && strpbrk(path, " \\t\\r\\n"))
+        if (!quote && strpbrk(path, " \t\r\n"))
             continue;
         matches[count++] = Dup(path);
     }
@@ -487,6 +487,16 @@ static int CompleteLine(char *buf, size_t *n, size_t cap)
     char *completion = command
         ? CommandCompletion(prefix)
         : PathCompletion(prefix, quote);
+
+    /*
+     * At command position, a prefix may also name a local executable path
+     * or a directory/file. If no command matches, fall back to filesystem
+     * completion so names such as "dow<TAB>" can resolve to "downloads/".
+     */
+    if ((!completion || strlen(completion) <= length) && command) {
+        free(completion);
+        completion = PathCompletion(prefix, quote);
+    }
 
     if (!completion || strlen(completion) <= length) {
         free(completion);

@@ -33,13 +33,15 @@ int main(void)
 
     char bin[PATH_MAX];
     char file[PATH_MAX];
+    char directory[PATH_MAX];
     char command[PATH_MAX];
 
     snprintf(bin, sizeof(bin), "%s/bin", temp);
     snprintf(file, sizeof(file), "%s/completion file.txt", temp);
+    snprintf(directory, sizeof(directory), "%s/downloads", temp);
     snprintf(command, sizeof(command), "%s/cstest-command", bin);
 
-    if (mkdir(bin, 0700) < 0)
+    if (mkdir(bin, 0700) < 0 || mkdir(directory, 0700) < 0)
         Fail("mkdir failed");
 
     FILE *f = fopen(file, "w");
@@ -71,6 +73,8 @@ int main(void)
 
     ExpectCompletion("cstest", "cstest-command");
     ExpectCompletion("printf x | cstest", "printf x | cstest-command");
+    ExpectCompletion("dow", "downloads/");
+    ExpectCompletion("cat dow", "cat downloads/");
     ExpectCompletion("cat 'completion", "cat 'completion file.txt");
 
     dup2(saved_stdout, STDOUT_FILENO);
@@ -79,6 +83,7 @@ int main(void)
     unlink(command);
     unlink(file);
     rmdir(bin);
+    rmdir(directory);
     rmdir(temp);
     return 0;
 }
