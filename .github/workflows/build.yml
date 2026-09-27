@@ -23,3 +23,6 @@ jobs:
           printf '%s\n' 'true &' > /tmp/cs-background.cs
           ./cs /tmp/cs-background.cs > /tmp/cs-background.out 2>&1
           grep -q '\[' /tmp/cs-background.out
+          printf '%s\n' 'echo *.cs' > /tmp/cs-glob.cs
+          ./cs /tmp/cs-glob.cs > /tmp/cs-glob.out
+          grep -q 'example.cs' /tmp/cs-glob.out
