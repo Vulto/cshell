@@ -92,11 +92,24 @@ build("game")
 
 Function parameters and local variables are local to the function call.
 
-## Variable/command conflicts
+## Variables and commands
 
-A variable name cannot be the name of an executable found through `PATH`. The shell rejects the assignment and requires a different variable name.
+Variable names may be the same as command names, following the shell-style distinction between command position and argument expansion.
 
-`PATH` changes are checked against existing variables before the new value is accepted.
+The first word of a command is always resolved as a command. Unquoted arguments matching defined variables are expanded.
+
+For example:
+
+```c
+ls = "value"
+ls
+echo ls
+echo "ls"
+```
+
+Here `ls` in command position still runs the executable, while the unquoted argument expands to the variable value.
+
+The special variable `status` contains the exit status of the most recently completed command.
 
 ## Current shell scope
 
@@ -117,8 +130,7 @@ Implemented:
 - double-quoted and single-quoted strings
 - external command execution through `PATH`
 - `cd` and `exit`
-- command/variable name collision checking
-- command exit status
+- command exit status exposed as the `status` variable
 - SIGINT handling for foreground commands
 
 Not implemented yet by design:
