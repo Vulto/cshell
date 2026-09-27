@@ -113,41 +113,8 @@ jobs:
           check_exact control-ok function-ok alias-ok substitution-ok 2 integration-ok
 
           echo "RUN interactive completion and job-control integration" >&2
-          completion_dir=$(mktemp -d)
-          completion_bin="$completion_dir/bin"
-          mkdir -p "$completion_bin"
-          cp "$(type -P true)" "$completion_bin/cstest-command"
-          printf '%s\\n' path-ok > "$completion_dir/completion file.txt"
-          completion_input=$(mktemp)
-          completion_log=$(mktemp)
-          printf '%b' 'cstest\t\n' > "$completion_input"
-          printf '%b' 'printf "x" | cstest\t\n' >> "$completion_input"
-          printf '%b' 'if (1) {\n' >> "$completion_input"
-          printf '%b' 'ech\t "multiline-ok"\n' >> "$completion_input"
-          printf '%b' '}\n' >> "$completion_input"
-          printf '%b' "cat 'completion\t'\n" >> "$completion_input"
-          printf '%b' 'sleep 1 &\n' >> "$completion_input"
-          printf '%b' 'jobs\n' >> "$completion_input"
-          printf '%b' 'fg 1\n' >> "$completion_input"
-          printf '%b' 'alias ll = echo\n' >> "$completion_input"
-          printf '%b' 'll "alias-ok"\n' >> "$completion_input"
-          printf '%b' 'exit\n' >> "$completion_input"
-          set +e
-          (
-            cd "$completion_dir"
-            PATH="$completion_bin:$PATH" timeout 15s script -qefc "$GITHUB_WORKSPACE/cs" "$completion_log" < "$completion_input" >/dev/null
-          )
-          interactive_status=$?
-          set -e
-          cat "$completion_log"
-          test "$interactive_status" -eq 0
-          grep -a -q 'cstest-command' "$completion_log"
-          grep -a -q 'echo "multiline-ok"' "$completion_log"
-          grep -a -q "cat 'completion file.txt'" "$completion_log"
-          grep -a -q 'path-ok' "$completion_log"
-          grep -a -q 'Running' "$completion_log"
-          grep -a -q 'alias-ok' "$completion_log"
-          rm -rf "$completion_dir" "$completion_input" "$completion_log"
+          clang -std=c23 -O2 -Wall -Wextra -Werror tests/interactive.c -o /tmp/cshell-interactive-test -lutil
+          /tmp/cshell-interactive-test ./cs
 
           set +e
           ./cs examples/exit.cs > /tmp/cs-example-output
