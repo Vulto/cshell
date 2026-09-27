@@ -113,6 +113,16 @@ The special variable `status` contains the exit status of the most recently comp
 
 Script arguments are available as `argc`, `arg0`, `arg1`, and so on. `argc` counts arguments after the script filename; `arg0` is the script filename.
 
+Environment variables are imported at startup. Assignments update both the shell variable and the process environment:
+
+```c
+CC = "clang"
+PATH = "/usr/bin:/bin"
+unset CC
+```
+
+`cd` also keeps `PWD` and `OLDPWD` synchronized after a successful directory change.
+
 For example:
 
 ```sh
@@ -142,6 +152,8 @@ Implemented:
 - `cd` and `exit`
 - command exit status exposed as the `status` variable
 - script arguments exposed as `argc` and `argN` variables
+- environment variables imported and synchronized with the process environment
+- `unset` builtin
 - SIGINT handling for foreground commands
 
 Not implemented yet by design:
