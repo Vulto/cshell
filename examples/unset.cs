@@ -1,4 +1,4 @@
 temporary = "present"
 echo temporary
-unset temporary
+unset "temporary"
 echo status
