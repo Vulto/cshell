@@ -32,3 +32,6 @@ jobs:
           ./cs /tmp/cs-sub.cs > /tmp/cs-sub.out
           grep -qx 'substituted' /tmp/cs-sub.out
           grep -q 'history' /tmp/cs-history.out
+          printf '%s\n' 'true &' 'jobs' > /tmp/cs-jobs.cs
+          ./cs /tmp/cs-jobs.cs > /tmp/cs-jobs.out 2>&1
+          grep -q 'Running' /tmp/cs-jobs.out
