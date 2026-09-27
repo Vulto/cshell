@@ -4,4 +4,5 @@ check(value) {
     }
     return 0
 }
-echo check(1)
+check(1)
+echo status
