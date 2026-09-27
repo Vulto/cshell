@@ -1,4 +1,8 @@
 name: build
+concurrency:
+  group: cshell-ci
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -35,3 +39,5 @@ jobs:
           printf '%s\n' 'true &' 'jobs' > /tmp/cs-jobs.cs
           ./cs /tmp/cs-jobs.cs > /tmp/cs-jobs.out 2>&1
           grep -q 'Running' /tmp/cs-jobs.out
+          clang -std=c23 -O2 -Wall -Wextra -Werror test_pty.c -lutil -o test_pty
+          ./test_pty
