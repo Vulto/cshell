@@ -488,6 +488,16 @@ static int CompleteLine(char *buf, size_t *n, size_t cap)
         ? CommandCompletion(prefix)
         : PathCompletion(prefix, quote);
 
+    /*
+     * At command position, a prefix may also name a local executable path
+     * or a directory/file. If no command matches, fall back to filesystem
+     * completion so names such as "dow<TAB>" can resolve to "downloads/".
+     */
+    if ((!completion || strlen(completion) <= length) && command) {
+        free(completion);
+        completion = PathCompletion(prefix, quote);
+    }
+
     if (!completion || strlen(completion) <= length) {
         free(completion);
         return 0;
