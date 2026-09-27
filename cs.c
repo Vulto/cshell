@@ -1535,8 +1535,7 @@ static char *ExpandVariables(Runtime *r, const char *s) {
       out[n++] = (char)36;
       continue;
     }
-    const char *v =
-        !strcmp(name, "status") ? VarGet(&r->vars, "status") : getenv(name);
+    const char *v = getenv(name);
     if (!v)
       v = "";
     size_t len = strlen(v);
