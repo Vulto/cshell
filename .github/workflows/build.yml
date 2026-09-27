@@ -13,4 +13,4 @@ jobs:
         run: clang -std=c23 -O3 -Wall -Wextra -Werror cs.c -o cs
       - name: Smoke test
         run: |
-          ./cs test.cs
+          ./cs example.cs
