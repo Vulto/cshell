@@ -100,6 +100,38 @@ int main(int argc, char **argv)
         _exit(112);
     }
 
+    char prompt[4096] = {0};
+    size_t prompt_length = 0;
+    bool prompt_seen = false;
+
+    for (int ticks = 0; ticks < 100; ++ticks) {
+        struct pollfd pfd = {.fd = master, .events = POLLIN | POLLHUP};
+        int ready = poll(&pfd, 1, 100);
+
+        if (ready > 0 && (pfd.revents & (POLLIN | POLLHUP))) {
+            char buffer[512];
+            ssize_t n = read(master, buffer, sizeof(buffer));
+
+            if (n > 0) {
+                size_t available = sizeof(prompt) - prompt_length - 1;
+                if ((size_t)n > available)
+                    n = (ssize_t)available;
+
+                memcpy(prompt + prompt_length, buffer, (size_t)n);
+                prompt_length += (size_t)n;
+                prompt[prompt_length] = 0;
+
+                if (strstr(prompt, "cs> ")) {
+                    prompt_seen = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (!prompt_seen)
+        Fail("shell did not present its initial prompt");
+
     size_t input_length = strlen(input);
     size_t sent = 0;
     while (sent < input_length) {
