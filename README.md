@@ -5,7 +5,7 @@
 ## Build
 
 ```sh
-cc -std=c11 -O2 -Wall -Wextra cs.c -o cs
+cc -std=c23 -O3 -Wall -Wextra -Werror cs.c -o cs
 ```
 
 ## Interactive use
