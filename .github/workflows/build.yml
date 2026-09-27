@@ -44,6 +44,7 @@ jobs:
           test -n "$(cat /tmp/cs-env.out)"
           printf '%s\n' 'false' 'if ($? == 1 && !(1 == 0) || 0) { echo logical-ok }' > /tmp/cs-logical.cs
           ./cs /tmp/cs-logical.cs > /tmp/cs-logical.out
+          cat /tmp/cs-logical.out
           grep -qx 'logical-ok' /tmp/cs-logical.out
           grep -q 'history' /tmp/cs-history.out
           printf '%s\n' 'true &' 'jobs' > /tmp/cs-jobs.cs
