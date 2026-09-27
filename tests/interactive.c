@@ -122,7 +122,9 @@ int main(int argc, char **argv)
 
     close(slave);
 
-    usleep(1000000);\n\n    size_t input_length = strlen(input);
+    usleep(1000000);
+
+    size_t input_length = strlen(input);
     size_t sent = 0;
     while (sent < input_length) {
         ssize_t n = write(master, input + sent, input_length - sent);
