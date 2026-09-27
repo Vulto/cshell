@@ -29,3 +29,6 @@ jobs:
           printf '%s\n' 'alias ll = "echo alias"' 'll' 'history' | ./cs > /tmp/cs-history.out
           grep -q 'alias' /tmp/cs-history.out
           grep -q 'history' /tmp/cs-history.out
+          printf '%s\n' 'true &' 'jobs' > /tmp/cs-jobs.cs
+          ./cs /tmp/cs-jobs.cs > /tmp/cs-jobs.out 2>&1
+          grep -q 'Running' /tmp/cs-jobs.out
