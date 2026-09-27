@@ -42,7 +42,11 @@ jobs:
           printf '%s\n' 'echo "$HOME"' > /tmp/cs-env.cs
           ./cs /tmp/cs-env.cs > /tmp/cs-env.out
           test -n "$(cat /tmp/cs-env.out)"
-          printf '%s\n' 'false' 'if ($? == 1 && !(1 == 0) || 0) { echo logical-ok }' > /tmp/cs-logical.cs
+          printf '%s\n' 'CC = "clang"' 'FLAGS = "-std=c23 -O3 -Wall -Wextra -Werror"' 'SOURCE = "cs.c"' 'BIN = "/tmp/cs-built"' 'CC FLAGS SOURCE -o BIN' > /tmp/cs-build.cs
+          ./cs /tmp/cs-build.cs
+          test -x /tmp/cs-built
+
+          printf '%s\n' 'false' 'if (status == 1 && !(1 == 0) || 0) { echo logical-ok }' > /tmp/cs-logical.cs
           ./cs /tmp/cs-logical.cs > /tmp/cs-logical.out
           grep -qx 'logical-ok' /tmp/cs-logical.out
           grep -q 'history' /tmp/cs-history.out
