@@ -88,7 +88,7 @@ static Arg ParseCommandArg(Parser*p){if(Is(p,T_STR)){Arg x={p->t.s,true,false};p
 
 static bool IsRedirOp(Kind k){return k==T_LT||k==T_GT||k==T_DGT;}
 static Stmt *ParseCommand(Parser*p){Pos q=p->t.p;Stmt*s=SNew(S_CMD,q);for(;;){if(Is(p,T_EOF)||Is(p,T_NL)||Is(p,T_SEMI)||Is(p,T_RB)||Is(p,T_PIPE)||Is(p,T_AMP))break;int fd=-1;Kind op=T_EOF;if(Is(p,T_NUM)&&(p->n.k==T_LT||p->n.k==T_GT||p->n.k==T_DGT)){fd=(int)p->t.n;Bump(p);op=p->t.k;Bump(p);}else if(IsRedirOp(p->t.k)){op=p->t.k;fd=op==T_LT?0:1;Bump(p);}if(op!=T_EOF){if(!(Is(p,T_ID)||Is(p,T_NUM)||Is(p,T_STR)))Fatal(p->t.p,"expected redirection target");Redir r={0};r.fd=fd;r.mode=op==T_LT?0:(op==T_DGT?2:1);r.target=ParseCommandArg(p);RPush(&s->u.cmd.redirs,r);continue;}if(!WordFragment(p->t.k)&&!Is(p,T_STR))Fatal(p->t.p,"invalid command argument");APush(&s->u.cmd.args,ParseCommandArg(p));}if(!s->u.cmd.args.n)Fatal(q,"empty command");if(Is(p,T_SEMI))Bump(p);else if(!Is(p,T_NL)&&!Is(p,T_RB)&&!Is(p,T_EOF)&&!Is(p,T_PIPE)&&!Is(p,T_AMP))Fatal(p->t.p,"expected end of command");return s;}
-static Stmt *ParsePipeline(Parser*p){Stmt*s=SNew(S_PIPE,p->t.p);SPush(&s->u.pipe,ParseCommand(p));while(Is(p,T_PIPE)){Bump(p);if(Is(p,T_NL)||Is(p,T_SEMI)||Is(p,T_RB)||Is(p,T_EOF))Fatal(p->t.p,"expected command after '|'");SPush(&s->u.pipe,ParseCommand(p));}return s;}
+static Stmt *ParsePipeline(Parser*p){Stmt*first=ParseCommand(p);if(!Is(p,T_PIPE))return first;Stmt*s=SNew(S_PIPE,first->p);SPush(&s->u.pipe,first);while(Is(p,T_PIPE)){Bump(p);if(Is(p,T_NL)||Is(p,T_SEMI)||Is(p,T_RB)||Is(p,T_EOF))Fatal(p->t.p,"expected command after '|'");SPush(&s->u.pipe,ParseCommand(p));}return s;}
 static bool LooksFuncDef(Parser*p){
 	if(!Is(p,T_ID)||(p->n.k!=T_LP)) return false;
 	Lexer l=p->l; int depth=1; Tok t=Next(&l);
