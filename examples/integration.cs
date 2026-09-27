@@ -9,7 +9,7 @@ build(name) {
     return 0
 }
 
-build function-ok
+build("function-ok")
 alias hi = echo
 hi "alias-ok"
 echo `printf "substitution-ok"`
