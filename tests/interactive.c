@@ -9,6 +9,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -89,16 +90,37 @@ int main(int argc, char **argv)
         "exit\n";
 
     int master = -1;
-    pid_t pid = forkpty(&master, NULL, NULL, NULL);
+    int slave = -1;
+
+    if (openpty(&master, &slave, NULL, NULL, NULL) < 0)
+        Fail("openpty failed");
+
+    pid_t pid = fork();
     if (pid < 0)
-        Fail("forkpty failed");
+        Fail("fork failed");
 
     if (pid == 0) {
-        if (chdir(temp) < 0)
+        close(master);
+
+        if (setsid() < 0)
             _exit(111);
+        if (ioctl(slave, TIOCSCTTY, 0) < 0)
+            _exit(112);
+        if (dup2(slave, STDIN_FILENO) < 0 ||
+            dup2(slave, STDOUT_FILENO) < 0 ||
+            dup2(slave, STDERR_FILENO) < 0)
+            _exit(113);
+
+        close(slave);
+
+        if (chdir(temp) < 0)
+            _exit(114);
+
         execl(cs_path, cs_path, (char *)NULL);
-        _exit(112);
+        _exit(115);
     }
+
+    close(slave);
 
     char prompt[4096] = {0};
     size_t prompt_length = 0;
