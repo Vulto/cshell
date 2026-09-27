@@ -134,7 +134,7 @@ jobs:
           printf 'exit\\n' >> "$completion_input"
           (
             cd "$completion_dir"
-            PATH="$completion_bin:$PATH" script -qefc "$GITHUB_WORKSPACE/cs" "$completion_log" < "$completion_input" >/dev/null
+            PATH="$completion_bin:$PATH" timeout 15s script -qefc "$GITHUB_WORKSPACE/cs" "$completion_log" < "$completion_input" >/dev/null
           )
           grep -a -q 'cstest-command' "$completion_log"
           grep -a -q 'echo "multiline-ok"' "$completion_log"
