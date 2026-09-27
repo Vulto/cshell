@@ -1668,12 +1668,24 @@ static char **BuildArgv(Runtime *r, Args *a) {
   char **av = calloc(cap, sizeof(char *));
   for (size_t i = 0; i < a->n; i++) {
     Arg *x = &a->a[i];
-    char *variables = ExpandVariables(r, x->s);
+    const char *value = NULL;
+    bool script_var = false;
+
+    if (!x->quoted)
+      value = VarGet(&r->vars, x->s);
+
+    if (value)
+      script_var = true;
+    else
+      value = x->s;
+
+    char *variables = script_var ? Dup(value) : ExpandVariables(r, value);
     const char *v = variables;
     bool sub = false;
     char *expanded = ExpandBackquotes(r, v, &sub);
     free(variables);
-    if (i > 0 && !x->quoted && sub) {
+
+    if (!x->quoted && (script_var || sub)) {
       char *save = NULL;
       for (char *part = strtok_r(expanded, " \t\r\n", &save); part;
            part = strtok_r(NULL, " \t\r\n", &save))
@@ -1681,7 +1693,8 @@ static char **BuildArgv(Runtime *r, Args *a) {
       free(expanded);
       continue;
     }
-    if (i > 0 && !x->quoted && HasGlob(expanded)) {
+
+    if (!x->quoted && HasGlob(expanded)) {
       glob_t g = {0};
       int rc = glob(expanded, GLOB_NOCHECK, NULL, &g);
       if (rc == 0) {
@@ -1693,6 +1706,7 @@ static char **BuildArgv(Runtime *r, Args *a) {
       }
       globfree(&g);
     }
+
     ArgvPush(&av, &n, &cap, expanded);
     free(expanded);
   }
