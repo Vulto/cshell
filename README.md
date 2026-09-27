@@ -45,13 +45,15 @@ The `examples/` directory is the executable language reference. Each file demons
 - `arguments.cs` — script arguments
 - `environment.cs` — `$NAME` environment variables
 - `command_variable.cs` — command names stored in variables
-- `redirection.cs` — input/output redirection
+- `redirection.cs` — input/output/error redirection
 - `pipe.cs` — pipelines
 - `glob.cs` — pathname globbing
 - `command_substitution.cs` — backquote command substitution
 - `background.cs` — background execution and jobs
 - `alias_history.cs` — aliases and history
 - `cd_exit.cs` — builtin directory handling
+- `unset.cs` — removing script and environment variables
+- `exit.cs` — shell exit status
 
 To test the language locally:
 
