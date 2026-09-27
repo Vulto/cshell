@@ -1,0 +1,1 @@
+echo examples/*.cs

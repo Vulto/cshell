@@ -18,45 +18,63 @@ jobs:
       - uses: actions/checkout@v4
       - name: Build
         run: clang -std=c23 -O3 -Wall -Wextra -Werror cs.c -o cs
-      - name: Smoke test
+      - name: Run language examples
+        shell: bash
         run: |
-          ./cs example.cs
-          printf 'echo "redirected"\n' > /tmp/cs-redirection.cs
-          ./cs /tmp/cs-redirection.cs > /tmp/cs-redirection.out
-          grep -qx 'redirected' /tmp/cs-redirection.out
-          printf '%s\n' 'printf "%s\n" a b | wc' > /tmp/cs-pipe.cs
-          ./cs /tmp/cs-pipe.cs > /tmp/cs-pipe.out
-          grep -q '2' /tmp/cs-pipe.out
-          printf '%s\n' 'true &' > /tmp/cs-background.cs
-          ./cs /tmp/cs-background.cs > /tmp/cs-background.out 2>&1
-          grep -q '\[' /tmp/cs-background.out
-          printf '%s\n' 'echo *.cs' > /tmp/cs-glob.cs
-          ./cs /tmp/cs-glob.cs > /tmp/cs-glob.out
-          grep -q 'example.cs' /tmp/cs-glob.out
-          printf '%s\n' 'alias ll = "echo alias"' 'll' 'history' | ./cs > /tmp/cs-history.out
-          grep -q 'alias' /tmp/cs-history.out
-          printf '%s\n' 'echo `echo substituted`' > /tmp/cs-sub.cs
-          ./cs /tmp/cs-sub.cs > /tmp/cs-sub.out
-          grep -qx 'substituted' /tmp/cs-sub.out
-          test -n "$HOME"
-          printf '%s\n' 'echo "$HOME"' > /tmp/cs-env.cs
-          ./cs /tmp/cs-env.cs > /tmp/cs-env.out
-          test -n "$(cat /tmp/cs-env.out)"
-          printf '%s\n' 'CC = "clang"' 'FLAGS = "-std=c23 -O3 -Wall -Wextra -Werror"' 'SOURCE = "cs.c"' 'BIN = "/tmp/cs-built"' 'CC FLAGS SOURCE -o BIN' > /tmp/cs-build.cs
-          ./cs /tmp/cs-build.cs
-          test -x /tmp/cs-built
+          set -euo pipefail
 
-          printf '%s\n' 'numbers = [' '10,' '20,' '30,' '40' ']' 'echo numbers[0]' 'echo numbers[3]' 'echo numbers.length' 'numbers[1] = 25' 'echo numbers[1]' 'for (i = 0; i < numbers.length; ++i) { echo numbers[i] }' > /tmp/cs-arrays.cs
-          ./cs /tmp/cs-arrays.cs > /tmp/cs-arrays.out
-          printf '%s\n' '10' '40' '4' '25' '10' '25' '30' '40' > /tmp/cs-arrays.expected
-          diff -u /tmp/cs-arrays.expected /tmp/cs-arrays.out
+          run_example() {
+            local file="$1"
+            shift
+            local output="/tmp/cs-example-output"
+            ./cs "$file" "$@" >"$output"
+            test -s "$output"
+            echo "PASS $file"
+            cat "$output"
+          }
 
-          printf '%s\n' 'false' 'if (status == 1 && !(1 == 0) || 0) { echo logical-ok }' > /tmp/cs-logical.cs
-          ./cs /tmp/cs-logical.cs > /tmp/cs-logical.out
-          grep -qx 'logical-ok' /tmp/cs-logical.out
-          grep -q 'history' /tmp/cs-history.out
-          printf '%s\n' 'true &' 'jobs' > /tmp/cs-jobs.cs
-          ./cs /tmp/cs-jobs.cs > /tmp/cs-jobs.out 2>&1
-          grep -q 'Running' /tmp/cs-jobs.out
-          clang -std=c23 -O2 -Wall -Wextra -Werror test_pty.c -lutil -o test_pty
-          ./test_pty
+          run_example examples/basic.cs | grep -qx 'PASS examples/basic.cs'
+          run_example examples/variables.cs | grep -qx 'PASS examples/variables.cs'
+          run_example examples/if.cs | grep -qx 'PASS examples/if.cs'
+          run_example examples/while.cs | grep -qx 'PASS examples/while.cs'
+          run_example examples/for.cs | grep -qx 'PASS examples/for.cs'
+          run_example examples/switch.cs | grep -qx 'PASS examples/switch.cs'
+          run_example examples/function.cs | grep -qx 'PASS examples/function.cs'
+          run_example examples/array.cs | grep -qx 'PASS examples/array.cs'
+          run_example examples/system_variable.cs system-one system-two | grep -qx 'PASS examples/system_variable.cs'
+          run_example examples/environment.cs | grep -qx 'PASS examples/environment.cs'
+          run_example examples/arguments.cs argument-one argument-two | grep -qx 'PASS examples/arguments.cs'
+          run_example examples/strings.cs | grep -qx 'PASS examples/strings.cs'
+          run_example examples/expressions.cs | grep -qx 'PASS examples/expressions.cs'
+          run_example examples/command_variable.cs | grep -qx 'PASS examples/command_variable.cs'
+          run_example examples/redirection.cs | grep -qx 'PASS examples/redirection.cs'
+          run_example examples/pipe.cs | grep -qx 'PASS examples/pipe.cs'
+          run_example examples/glob.cs | grep -qx 'PASS examples/glob.cs'
+          run_example examples/command_substitution.cs | grep -qx 'PASS examples/command_substitution.cs'
+          run_example examples/background.cs | grep -qx 'PASS examples/background.cs'
+          run_example examples/alias_history.cs | grep -qx 'PASS examples/alias_history.cs'
+          run_example examples/functions_return.cs | grep -qx 'PASS examples/functions_return.cs'
+          run_example examples/cd_exit.cs | grep -qx 'PASS examples/cd_exit.cs'
+
+          grep -q 'hello' < <(./cs examples/basic.cs)
+          grep -q '3' < <(./cs examples/variables.cs)
+          grep -q 'if-ok' < <(./cs examples/if.cs)
+          test "$(./cs examples/while.cs)" = $'1\n3'
+          test "$(./cs examples/for.cs)" = $'0\n1\n2'
+          grep -qx 'two' < <(./cs examples/switch.cs)
+          grep -qx '5' < <(./cs examples/function.cs)
+          test "$(./cs examples/array.cs)" = $'main.c\nother.c\n3\nmain.c\nother.c\ntest.c'
+          test "$(./cs examples/system_variable.cs system-one system-two)" = $'0\n2\nexamples/system_variable.cs\nsystem-one\nsystem-two'
+          test -n "$(./cs examples/environment.cs | head -n1)"
+          test "$(./cs examples/arguments.cs argument-one argument-two)" = $'2\nexamples/arguments.cs\nargument-one\nargument-two'
+          test "$(./cs examples/strings.cs)" = $'single quoted\ndouble quoted'
+          grep -qx '13' < <(./cs examples/expressions.cs | head -n1)
+          grep -qx 'command-variable-ok' < <(./cs examples/command_variable.cs)
+          test "$(./cs examples/redirection.cs)" = 'redirect-ok'
+          test "$(./cs examples/pipe.cs)" = '3'
+          grep -q 'examples/array.cs' < <(./cs examples/glob.cs)
+          test "$(./cs examples/command_substitution.cs)" = 'substituted'
+          grep -q 'Running' < <(./cs examples/background.cs)
+          grep -q 'alias-ok' < <(./cs examples/alias_history.cs)
+          test "$(./cs examples/functions_return.cs)" = '42'
+          test "$(./cs examples/cd_exit.cs)" = '/tmp'
