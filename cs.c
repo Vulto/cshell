@@ -2380,9 +2380,8 @@ static char *ReadAll(FILE *f) {
   return b;
 }
 static void SigInt(int x) {
-  \n(void) x;
-  \n(void) write(STDERR_FILENO, "\n", 1);
-  \n
+  (void)x;
+  (void)write(STDERR_FILENO, "\n", 1);
 }
 static void SetScriptArgs(Runtime *r, int argc, char **argv) {
   char b[64];
