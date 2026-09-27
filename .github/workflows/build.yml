@@ -132,10 +132,15 @@ jobs:
           printf 'alias ll = echo\\n' >> "$completion_input"
           printf 'll "alias-ok"\\n' >> "$completion_input"
           printf 'exit\\n' >> "$completion_input"
+          set +e
           (
             cd "$completion_dir"
             PATH="$completion_bin:$PATH" timeout 15s script -qefc "$GITHUB_WORKSPACE/cs" "$completion_log" < "$completion_input" >/dev/null
           )
+          interactive_status=$?
+          set -e
+          cat "$completion_log"
+          test "$interactive_status" -eq 0
           grep -a -q 'cstest-command' "$completion_log"
           grep -a -q 'echo "multiline-ok"' "$completion_log"
           grep -a -q "cat 'completion file.txt'" "$completion_log"
