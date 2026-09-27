@@ -53,7 +53,6 @@ jobs:
           grep -qx 'two' /tmp/cs-example-output
 
           run_example examples/function.cs
-          cat /tmp/cs-example-output
           grep -qx '5' /tmp/cs-example-output
 
           run_example examples/array.cs
@@ -73,7 +72,6 @@ jobs:
           test "$(cat /tmp/cs-example-output)" = $'single quoted\ndouble quoted'
 
           run_example examples/expressions.cs
-          cat /tmp/cs-example-output
           grep -qx '13' /tmp/cs-example-output
           grep -qx '30' /tmp/cs-example-output
           grep -qx 'expression-ok' /tmp/cs-example-output
