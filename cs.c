@@ -439,7 +439,7 @@ static char *PathCompletion(const char *prefix, char quote)
     size_t count = 0;
     for (size_t i = 0; i < g.gl_pathc; ++i) {
         const char *path = g.gl_pathv[i];
-        if (!quote && strpbrk(path, " \\t\\r\\n"))
+        if (!quote && strpbrk(path, " \t\r\n"))
             continue;
         matches[count++] = Dup(path);
     }
