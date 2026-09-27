@@ -1,3 +1,4 @@
+#define _POSIX_C_SOURCE 200809L
 #include <pty.h>
 #include <sys/wait.h>
 #include <unistd.h>
