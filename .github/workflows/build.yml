@@ -16,8 +16,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Build
         run: clang -std=c23 -O3 -Wall -Wextra -Werror cs.c -o cs
+
       - name: Run language examples
         shell: bash
         run: |
@@ -30,46 +32,47 @@ jobs:
             ./cs "$file" "$@" > /tmp/cs-example-output
           }
 
+          check_exact() {
+            printf '%s\n' "$@" > /tmp/cs-example-expected
+            diff -u /tmp/cs-example-expected /tmp/cs-example-output
+          }
+
           run_example examples/basic.cs
-          grep -qx 'hello' /tmp/cs-example-output
-          grep -qx 'world' /tmp/cs-example-output
-          grep -qx 'one' /tmp/cs-example-output
-          grep -qx 'two' /tmp/cs-example-output
+          check_exact hello world one two
 
           run_example examples/variables.cs
-          grep -qx '3' /tmp/cs-example-output
-          grep -qx 'name: cshell' /tmp/cs-example-output
+          check_exact 3 "name: cshell"
 
           run_example examples/if.cs
-          grep -qx 'if-ok' /tmp/cs-example-output
+          check_exact if-ok
 
           run_example examples/while.cs
-          test "$(cat /tmp/cs-example-output)" = $'1\n3'
+          check_exact 1 3
 
           run_example examples/for.cs
-          test "$(cat /tmp/cs-example-output)" = $'0\n1\n2'
+          check_exact 0 1 2
 
           run_example examples/switch.cs
-          grep -qx 'two' /tmp/cs-example-output
+          check_exact two
 
           run_example examples/function.cs
-          grep -qx '5' /tmp/cs-example-output
+          check_exact 5
 
           run_example examples/array.cs
-          test "$(cat /tmp/cs-example-output)" = $'main.c\nother.c\n3\nmain.c\nother.c\ntest.c'
+          check_exact main.c other.c 3 main.c other.c test.c
 
           run_example examples/system_variable.cs system-one system-two
-          test "$(cat /tmp/cs-example-output)" = $'0\n2\nexamples/system_variable.cs\nsystem-one\nsystem-two'
+          check_exact 0 2 examples/system_variable.cs system-one system-two
 
           run_example examples/environment.cs
           test -n "$(head -n1 /tmp/cs-example-output)"
           test -n "$(tail -n1 /tmp/cs-example-output)"
 
           run_example examples/arguments.cs argument-one argument-two
-          test "$(cat /tmp/cs-example-output)" = $'2\nexamples/arguments.cs\nargument-one\nargument-two'
+          check_exact 2 examples/arguments.cs argument-one argument-two
 
           run_example examples/strings.cs
-          test "$(cat /tmp/cs-example-output)" = $'single quoted\ndouble quoted'
+          check_exact "single quoted" "double quoted"
 
           run_example examples/expressions.cs
           grep -qx '13' /tmp/cs-example-output
@@ -77,19 +80,19 @@ jobs:
           grep -qx 'expression-ok' /tmp/cs-example-output
 
           run_example examples/command_variable.cs
-          grep -qx 'command-variable-ok' /tmp/cs-example-output
+          check_exact command-variable-ok
 
           run_example examples/redirection.cs
-          test "$(cat /tmp/cs-example-output)" = 
+          check_exact first second error
 
           run_example examples/pipe.cs
-          grep -qx '3' /tmp/cs-example-output
+          check_exact 3
 
           run_example examples/glob.cs
           grep -q 'examples/array.cs' /tmp/cs-example-output
 
           run_example examples/command_substitution.cs
-          grep -qx 'substituted' /tmp/cs-example-output
+          check_exact substituted
 
           run_example examples/background.cs
           grep -q 'Running' /tmp/cs-example-output
@@ -98,39 +101,16 @@ jobs:
           grep -q 'alias-ok' /tmp/cs-example-output
 
           run_example examples/functions_return.cs
-          grep -qx 'returned' /tmp/cs-example-output
+          check_exact returned
 
           run_example examples/cd_exit.cs
-          grep -qx '/tmp' /tmp/cs-example-output
+          check_exact /tmp
 
           run_example examples/unset.cs
-          grep -qx 'present' /tmp/cs-example-output
-          grep -qx '0' /tmp/cs-example-output
+          check_exact present 0
 
           set +e
           ./cs examples/exit.cs > /tmp/cs-example-output
           exit_status=$?
           set -e
           test "$exit_status" -eq 7
-first\nsecond\nerror'
-
-          run_example examples/pipe.cs
-          grep -qx '3' /tmp/cs-example-output
-
-          run_example examples/glob.cs
-          grep -q 'examples/array.cs' /tmp/cs-example-output
-
-          run_example examples/command_substitution.cs
-          grep -qx 'substituted' /tmp/cs-example-output
-
-          run_example examples/background.cs
-          grep -q 'Running' /tmp/cs-example-output
-
-          run_example examples/alias_history.cs
-          grep -q 'alias-ok' /tmp/cs-example-output
-
-          run_example examples/functions_return.cs
-          grep -qx 'returned' /tmp/cs-example-output
-
-          run_example examples/cd_exit.cs
-          grep -qx '/tmp' /tmp/cs-example-output
