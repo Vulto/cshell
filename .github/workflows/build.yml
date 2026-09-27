@@ -116,7 +116,7 @@ jobs:
           completion_dir=$(mktemp -d)
           completion_bin="$completion_dir/bin"
           mkdir -p "$completion_bin"
-          cp "$(command -v true)" "$completion_bin/cstest-command"
+          cp "$(type -P true)" "$completion_bin/cstest-command"
           printf '%s\\n' path-ok > "$completion_dir/completion file.txt"
           completion_input=$(mktemp)
           completion_log=$(mktemp)
