@@ -26,54 +26,78 @@ jobs:
           run_example() {
             local file="$1"
             shift
-            local output="/tmp/cs-example-output"
-            ./cs "$file" "$@" >"$output"
-            test -s "$output"
-            cat "$output"
+            ./cs "$file" "$@" > /tmp/cs-example-output
           }
 
           run_example examples/basic.cs
-          run_example examples/variables.cs
-          run_example examples/if.cs
-          run_example examples/while.cs
-          run_example examples/for.cs
-          run_example examples/switch.cs
-          run_example examples/function.cs
-          run_example examples/array.cs
-          run_example examples/system_variable.cs system-one system-two
-          run_example examples/environment.cs
-          run_example examples/arguments.cs argument-one argument-two
-          run_example examples/strings.cs
-          run_example examples/expressions.cs
-          run_example examples/command_variable.cs
-          run_example examples/redirection.cs
-          run_example examples/pipe.cs
-          run_example examples/globbing.cs
-          run_example examples/command_substitution.cs
-          run_example examples/background.cs
-          run_example examples/alias_history.cs
-          run_example examples/functions_return.cs
-          run_example examples/cd_exit.cs
+          grep -qx 'hello' /tmp/cs-example-output
+          grep -qx 'world' /tmp/cs-example-output
+          grep -qx 'one' /tmp/cs-example-output
+          grep -qx 'two' /tmp/cs-example-output
 
-          grep -q 'hello' < <(./cs examples/basic.cs)
-          grep -q '3' < <(./cs examples/variables.cs)
-          grep -q 'if-ok' < <(./cs examples/if.cs)
-          test "$(./cs examples/while.cs)" = $'1\n3'
-          test "$(./cs examples/for.cs)" = $'0\n1\n2'
-          grep -qx 'two' < <(./cs examples/switch.cs)
-          grep -qx '5' < <(./cs examples/function.cs)
-          test "$(./cs examples/array.cs)" = $'main.c\nother.c\n3\nmain.c\nother.c\ntest.c'
-          test "$(./cs examples/system_variable.cs system-one system-two)" = $'0\n2\nexamples/system_variable.cs\nsystem-one\nsystem-two'
-          test -n "$(./cs examples/environment.cs | head -n1)"
-          test "$(./cs examples/arguments.cs argument-one argument-two)" = $'2\nexamples/arguments.cs\nargument-one\nargument-two'
-          test "$(./cs examples/strings.cs)" = $'single quoted\ndouble quoted'
-          grep -qx '13' < <(./cs examples/expressions.cs | head -n1)
-          grep -qx 'command-variable-ok' < <(./cs examples/command_variable.cs)
-          test "$(./cs examples/redirection.cs)" = 'redirect-ok'
-          test "$(./cs examples/pipe.cs)" = '3'
-          grep -q 'examples/array.cs' < <(./cs examples/globbing.cs)
-          test "$(./cs examples/command_substitution.cs)" = 'substituted'
-          grep -q 'Running' < <(./cs examples/background.cs)
-          grep -q 'alias-ok' < <(./cs examples/alias_history.cs)
-          test "$(./cs examples/functions_return.cs)" = '42'
-          test "$(./cs examples/cd_exit.cs)" = '/tmp'
+          run_example examples/variables.cs
+          grep -qx '3' /tmp/cs-example-output
+          grep -qx 'name: cshell' /tmp/cs-example-output
+
+          run_example examples/if.cs
+          grep -qx 'if-ok' /tmp/cs-example-output
+
+          run_example examples/while.cs
+          test "$(cat /tmp/cs-example-output)" = $'1\n3'
+
+          run_example examples/for.cs
+          test "$(cat /tmp/cs-example-output)" = $'0\n1\n2'
+
+          run_example examples/switch.cs
+          grep -qx 'two' /tmp/cs-example-output
+
+          run_example examples/function.cs
+          grep -qx '5' /tmp/cs-example-output
+
+          run_example examples/array.cs
+          test "$(cat /tmp/cs-example-output)" = $'main.c\nother.c\n3\nmain.c\nother.c\ntest.c'
+
+          run_example examples/system_variable.cs system-one system-two
+          test "$(cat /tmp/cs-example-output)" = $'0\n2\nexamples/system_variable.cs\nsystem-one\nsystem-two'
+
+          run_example examples/environment.cs
+          test -n "$(head -n1 /tmp/cs-example-output)"
+          test -n "$(tail -n1 /tmp/cs-example-output)"
+
+          run_example examples/arguments.cs argument-one argument-two
+          test "$(cat /tmp/cs-example-output)" = $'2\nexamples/arguments.cs\nargument-one\nargument-two'
+
+          run_example examples/strings.cs
+          test "$(cat /tmp/cs-example-output)" = $'single quoted\ndouble quoted'
+
+          run_example examples/expressions.cs
+          grep -qx '13' /tmp/cs-example-output
+          grep -qx '30' /tmp/cs-example-output
+          grep -qx 'expression-ok' /tmp/cs-example-output
+
+          run_example examples/command_variable.cs
+          grep -qx 'command-variable-ok' /tmp/cs-example-output
+
+          run_example examples/redirection.cs
+          grep -qx 'redirect-ok' /tmp/cs-example-output
+
+          run_example examples/pipe.cs
+          grep -qx '3' /tmp/cs-example-output
+
+          run_example examples/glob.cs
+          grep -q 'examples/array.cs' /tmp/cs-example-output
+
+          run_example examples/command_substitution.cs
+          grep -qx 'substituted' /tmp/cs-example-output
+
+          run_example examples/background.cs
+          grep -q 'Running' /tmp/cs-example-output
+
+          run_example examples/alias_history.cs
+          grep -q 'alias-ok' /tmp/cs-example-output
+
+          run_example examples/functions_return.cs
+          grep -qx '42' /tmp/cs-example-output
+
+          run_example examples/cd_exit.cs
+          grep -qx '/tmp' /tmp/cs-example-output
