@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <time.h>
 #include <poll.h>
+#include <stdbool.h>
 int main(void){
  int master;pid_t p=forkpty(&master,NULL,NULL,NULL);if(p<0)return 1;
  if(p==0){execl("./cs","./cs",(char*)NULL);_exit(127);}
