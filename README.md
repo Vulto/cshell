@@ -96,15 +96,17 @@ Function parameters and local variables are local to the function call.
 
 Variable names may be the same as command names, following the shell-style distinction between command position and argument expansion.
 
-The first word of a command is always resolved as a command. Unquoted arguments matching defined variables are expanded.
+An unquoted command word that matches a defined script variable expands to its value. This also applies to the first word, so command paths and compiler names can be stored in variables.
 
 For example:
 
 ```c
-ls = "value"
-ls
-echo ls
-echo "ls"
+CC = "clang"
+FLAGS = "-std=c23 -O3 -Wall -Wextra -Werror"
+SOURCE = "cs.c"
+BIN = "cs"
+
+CC FLAGS SOURCE -o BIN
 ```
 
 Here `ls` in command position still runs the executable, while the unquoted argument expands to the variable value.
