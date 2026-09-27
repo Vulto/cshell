@@ -14,3 +14,6 @@ jobs:
       - name: Smoke test
         run: |
           ./cs example.cs
+          printf 'echo "redirected"\n' > /tmp/cs-redirection.cs
+          ./cs /tmp/cs-redirection.cs > /tmp/cs-redirection.out
+          grep -qx 'redirected' /tmp/cs-redirection.out
