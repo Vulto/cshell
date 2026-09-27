@@ -111,6 +111,16 @@ Here `ls` in command position still runs the executable, while the unquoted argu
 
 The special variable `status` contains the exit status of the most recently completed command.
 
+Script arguments are available as `argc`, `arg0`, `arg1`, and so on. `argc` counts arguments after the script filename; `arg0` is the script filename.
+
+For example:
+
+```sh
+./build.cs game debug
+```
+
+makes `argc` equal to `2`, with `arg0` set to `build.cs`, `arg1` to `game`, and `arg2` to `debug`.
+
 ## Current shell scope
 
 Implemented:
@@ -131,6 +141,7 @@ Implemented:
 - external command execution through `PATH`
 - `cd` and `exit`
 - command exit status exposed as the `status` variable
+- script arguments exposed as `argc` and `argN` variables
 - SIGINT handling for foreground commands
 
 Not implemented yet by design:
