@@ -155,6 +155,7 @@ static Value Eval(Runtime*r,Expr*e){Value z={0};switch(e->k){case E_NUM:z.isInt=
 static void FreeArgs(Args*a){for(size_t i=0;i<a->n;i++)free(a->a[i].s);free(a->a);}
 static int RunText(Runtime*r,const char*src);static void SetStatus(Runtime*r,int status){r->status=status;char b[32];snprintf(b,sizeof b,"%d",status);VarSetRaw(&r->vars,"status",b);}
 static char *ExpandVariables(Runtime*r,const char*s){
+ (void)r;
  size_t cap=strlen(s)+32,n=0;char*out=malloc(cap);if(!out)exit(2);
  for(size_t i=0;s[i];){
   if((unsigned char)s[i]!=36){if(n+2>cap){cap*=2;out=realloc(out,cap);}out[n++]=s[i++];continue;}
