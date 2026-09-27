@@ -46,6 +46,11 @@ jobs:
           ./cs /tmp/cs-build.cs
           test -x /tmp/cs-built
 
+          printf '%s\n' 'numbers = [' '10,' '20,' '30,' '40' ']' 'echo numbers[0]' 'echo numbers[3]' 'echo numbers.length' 'numbers[1] = 25' 'echo numbers[1]' 'for (i = 0; i < numbers.length; ++i) { echo numbers[i] }' > /tmp/cs-arrays.cs
+          ./cs /tmp/cs-arrays.cs > /tmp/cs-arrays.out
+          printf '%s\n' '10' '40' '4' '25' '10' '25' '30' '40' > /tmp/cs-arrays.expected
+          diff -u /tmp/cs-arrays.expected /tmp/cs-arrays.out
+
           printf '%s\n' 'false' 'if (status == 1 && !(1 == 0) || 0) { echo logical-ok }' > /tmp/cs-logical.cs
           ./cs /tmp/cs-logical.cs > /tmp/cs-logical.out
           grep -qx 'logical-ok' /tmp/cs-logical.out
