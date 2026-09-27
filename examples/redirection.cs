@@ -1,0 +1,5 @@
+echo "first" > "/tmp/cs-example-redirection"
+echo "second" >> "/tmp/cs-example-redirection"
+cat < "/tmp/cs-example-redirection"
+sh -c 'printf "%s\n" error >&2' 2> "/tmp/cs-example-redirection-error"
+cat "/tmp/cs-example-redirection-error"

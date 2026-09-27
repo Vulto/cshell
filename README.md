@@ -1,11 +1,11 @@
 # cs
 
-`cs` is a small interactive Linux shell with C-shaped control syntax and tcsh-inspired shell behavior where the syntax has not been deliberately changed.
+`cs` is a small Linux shell with C-shaped control syntax and tcsh-inspired shell behavior.
 
 ## Build
 
 ```sh
-cc -std=c23 -O3 -Wall -Wextra -Werror cs.c -o cs
+clang -std=c23 -O3 -Wall -Wextra -Werror cs.c -o cs
 ```
 
 ## Interactive use
@@ -14,21 +14,57 @@ cc -std=c23 -O3 -Wall -Wextra -Werror cs.c -o cs
 ./cs
 ```
 
-The shell reads and executes commands immediately. A closing `}` completes a multiline construct.
-
-## Script files
-
 Scripts use the `.cs` extension:
 
 ```sh
 ./cs build.cs
 ```
 
-A script can also be executable with:
+A script can also use:
 
 ```text
 #!/usr/bin/env cs
 ```
+
+## Examples
+
+The `examples/` directory is the executable language reference. Each file demonstrates one aspect of cshell and is executed by CI after every successful build.
+
+- `basic.cs` — commands and statements
+- `variables.cs` — variables and command expansion
+- `if.cs` — `if` / `else`
+- `while.cs` — `while`, `break`, `continue`
+- `for.cs` — `for`
+- `switch.cs` — `switch`, `case`, `default`
+- `function.cs` — functions and parameters
+- `functions_return.cs` — function return
+- `array.cs` — arrays, indexing, assignment, `.length`
+- `expressions.cs` — arithmetic and boolean expressions
+- `strings.cs` — quoted strings
+- `system_variable.cs` — `status`, `argc`, `argN`
+- `arguments.cs` — script arguments
+- `environment.cs` — `$NAME` environment variables
+- `command_variable.cs` — command names stored in variables
+- `redirection.cs` — input/output/error redirection
+- `pipe.cs` — pipelines
+- `glob.cs` — pathname globbing
+- `command_substitution.cs` — backquote command substitution
+- `background.cs` — background execution and jobs
+- `alias_history.cs` — aliases and history
+- `cd_exit.cs` — builtin directory handling
+- `unset.cs` — removing script and environment variables
+- `exit.cs` — shell exit status
+
+To test the language locally:
+
+```sh
+clang -std=c23 -O3 -Wall -Wextra -Werror cs.c -o cs
+for example in examples/*.cs; do
+    ./cs "$example" || exit 1
+done
+```
+
+The CI suite also checks expected output for every example, so a feature can fail CI even when the shell process itself exits successfully.
 
 ## Syntax
 
@@ -44,13 +80,24 @@ Variables have no `$` prefix:
 
 ```c
 count = 0
-printf "%d\\n" count
+echo count
 ++count
 ```
 
-An unquoted command argument that matches a defined variable expands to its value. Quoted text is literal.
+Unquoted command arguments matching script variables expand to their values. This also works in command position:
 
-Control flow:
+```c
+CC = "clang"
+FLAGS = "-std=c23 -O3 -Wall -Wextra -Werror"
+SOURCE = "cs.c"
+BIN = "/tmp/cs-built"
+
+CC FLAGS SOURCE -o BIN
+```
+
+Every `$NAME` reference is an environment-variable lookup. Script variables are referenced without `$`.
+
+Control flow uses C-like blocks:
 
 ```c
 if (count < 10) {
@@ -77,9 +124,17 @@ default: {
 }
 ```
 
-Semicolons are optional when the newline unambiguously terminates the statement. They can still separate multiple statements on one line.
+Arrays:
 
-Functions use C-like syntax:
+```c
+files = ["main.c", "util.c", "test.c"]
+
+echo files[0]
+files[1] = "other.c"
+echo files.length
+```
+
+Functions:
 
 ```c
 build(name) {
@@ -90,194 +145,35 @@ build(name) {
 build("game")
 ```
 
-Function parameters and local variables are local to the function call.
+Semicolons are optional when a newline unambiguously terminates a statement. They can separate multiple statements on one line.
 
-## Variables and commands
-
-Variable names may be the same as command names, following the shell-style distinction between command position and argument expansion.
-
-An unquoted command word that matches a defined script variable expands to its value. This also applies to the first word, so command paths and compiler names can be stored in variables.
-
-For example:
-
-```c
-CC = "clang"
-FLAGS = "-std=c23 -O3 -Wall -Wextra -Werror"
-SOURCE = "cs.c"
-BIN = "cs"
-
-CC FLAGS SOURCE -o BIN
-```
-
-Here `ls` in command position still runs the executable, while the unquoted argument expands to the variable value.
-
-The special script variable `status` contains the exit status of the most recently completed command. Every `$NAME` form is an environment-variable lookup; `# cs
-
-`cs` is a small interactive Linux shell with C-shaped control syntax and tcsh-inspired shell behavior where the syntax has not been deliberately changed.
-
-## Build
-
-```sh
-cc -std=c23 -O3 -Wall -Wextra -Werror cs.c -o cs
-```
-
-## Interactive use
-
-```sh
-./cs
-```
-
-The shell reads and executes commands immediately. A closing `}` completes a multiline construct.
-
-## Script files
-
-Scripts use the `.cs` extension:
-
-```sh
-./cs build.cs
-```
-
-A script can also be executable with:
-
-```text
-#!/usr/bin/env cs
-```
-
-## Syntax
-
-Commands remain shell commands:
-
-```c
-ls -la
-cd /tmp
-printf "%s\\n" hello
-```
-
-Variables have no `$` prefix:
-
-```c
-count = 0
-printf "%d\\n" count
-++count
-```
-
-An unquoted command argument that matches a defined variable expands to its value. Quoted text is literal.
-
-Control flow:
-
-```c
-if (count < 10) {
-    echo count
-} else {
-    echo "done"
-}
-
-while (count < 10) {
-    ++count
-}
-
-for (count = 0; count < 10; ++count) {
-    echo count
-}
-
-switch (count) {
-case 10: {
-    echo "ten"
-}
-default: {
-    echo "other"
-}
-}
-```
-
-Semicolons are optional when the newline unambiguously terminates the statement. They can still separate multiple statements on one line.
-
-Functions use C-like syntax:
-
-```c
-build(name) {
-    echo "building" name
-    return 0
-}
-
-build("game")
-```
-
-Function parameters and local variables are local to the function call.
-
-## Variables and commands
-
-Variable names may be the same as command names, following the shell-style distinction between command position and argument expansion.
-
-An unquoted command word that matches a defined script variable expands to its value. This also applies to the first word, so command paths and compiler names can be stored in variables.
-
-For example:
-
-```c
-CC = "clang"
-FLAGS = "-std=c23 -O3 -Wall -Wextra -Werror"
-SOURCE = "cs.c"
-BIN = "cs"
-
-CC FLAGS SOURCE -o BIN
-```
-
-Here `ls` in command position still runs the executable, while the unquoted argument expands to the variable value.
-
- does not select script variables.
-
-Script arguments are available as `argc`, `arg0`, `arg1`, and so on. `argc` counts arguments after the script filename; `arg0` is the script filename.
-
-Environment variables are imported at startup. Assignments update both the shell variable and the process environment:
-
-```c
-CC = "clang"
-PATH = "/usr/bin:/bin"
-unset CC
-```
-
-`cd` also keeps `PWD` and `OLDPWD` synchronized after a successful directory change.
-
-For example:
-
-```sh
-./build.cs game debug
-```
-
-makes `argc` equal to `2`, with `arg0` set to `build.cs`, `arg1` to `game`, and `arg2` to `debug`.
-
-## Current shell scope
+## Builtins and shell features
 
 Implemented:
 
-- interactive shell
+- interactive REPL
 - `.cs` script execution
-- C-style blocks
-- optional statement semicolons
+- variables and command expansion
+- arithmetic and boolean expressions
 - `if` / `else`
 - `while`
 - `for`
 - `switch` / `case` / `default`
 - `break` / `continue`
 - functions and `return`
-- variables and arithmetic/boolean expressions
-- automatic variable expansion in command arguments
-- double-quoted and single-quoted strings
-- external command execution through `PATH`
-- `cd` and `exit`
-- command exit status exposed as the `status` variable
-- script arguments exposed as `argc` and `argN` variables
-- environment variables imported and synchronized with the process environment
-- `unset` builtin
-- SIGINT handling for foreground commands
-
-Not implemented yet by design:
-
-- pipelines
+- arrays and indexed access
+- `cd`
+- `exit`
+- `status`
+- script arguments through `argc` and `argN`
+- environment variables through `$NAME`
+- `unset`
 - redirection
-- background execution/job control
+- pipelines
+- background execution and job control
 - globbing
 - command substitution
 - aliases
 - command history
-- completion
+- tab completion
+- SIGINT/SIGTSTP foreground job handling

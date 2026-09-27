@@ -16,47 +16,101 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
       - name: Build
         run: clang -std=c23 -O3 -Wall -Wextra -Werror cs.c -o cs
-      - name: Smoke test
+
+      - name: Run language examples
+        shell: bash
         run: |
-          ./cs example.cs
-          printf 'echo "redirected"\n' > /tmp/cs-redirection.cs
-          ./cs /tmp/cs-redirection.cs > /tmp/cs-redirection.out
-          grep -qx 'redirected' /tmp/cs-redirection.out
-          printf '%s\n' 'printf "%s\n" a b | wc' > /tmp/cs-pipe.cs
-          ./cs /tmp/cs-pipe.cs > /tmp/cs-pipe.out
-          grep -q '2' /tmp/cs-pipe.out
-          printf '%s\n' 'true &' > /tmp/cs-background.cs
-          ./cs /tmp/cs-background.cs > /tmp/cs-background.out 2>&1
-          grep -q '\[' /tmp/cs-background.out
-          printf '%s\n' 'echo *.cs' > /tmp/cs-glob.cs
-          ./cs /tmp/cs-glob.cs > /tmp/cs-glob.out
-          grep -q 'example.cs' /tmp/cs-glob.out
-          printf '%s\n' 'alias ll = "echo alias"' 'll' 'history' | ./cs > /tmp/cs-history.out
-          grep -q 'alias' /tmp/cs-history.out
-          printf '%s\n' 'echo `echo substituted`' > /tmp/cs-sub.cs
-          ./cs /tmp/cs-sub.cs > /tmp/cs-sub.out
-          grep -qx 'substituted' /tmp/cs-sub.out
-          test -n "$HOME"
-          printf '%s\n' 'echo "$HOME"' > /tmp/cs-env.cs
-          ./cs /tmp/cs-env.cs > /tmp/cs-env.out
-          test -n "$(cat /tmp/cs-env.out)"
-          printf '%s\n' 'CC = "clang"' 'FLAGS = "-std=c23 -O3 -Wall -Wextra -Werror"' 'SOURCE = "cs.c"' 'BIN = "/tmp/cs-built"' 'CC FLAGS SOURCE -o BIN' > /tmp/cs-build.cs
-          ./cs /tmp/cs-build.cs
-          test -x /tmp/cs-built
+          set -euo pipefail
 
-          printf '%s\n' 'numbers = [' '10,' '20,' '30,' '40' ']' 'echo numbers[0]' 'echo numbers[3]' 'echo numbers.length' 'numbers[1] = 25' 'echo numbers[1]' 'for (i = 0; i < numbers.length; ++i) { echo numbers[i] }' > /tmp/cs-arrays.cs
-          ./cs /tmp/cs-arrays.cs > /tmp/cs-arrays.out
-          printf '%s\n' '10' '40' '4' '25' '10' '25' '30' '40' > /tmp/cs-arrays.expected
-          diff -u /tmp/cs-arrays.expected /tmp/cs-arrays.out
+          run_example() {
+            local file="$1"
+            shift
+            echo "RUN $file" >&2
+            ./cs "$file" "$@" > /tmp/cs-example-output
+          }
 
-          printf '%s\n' 'false' 'if (status == 1 && !(1 == 0) || 0) { echo logical-ok }' > /tmp/cs-logical.cs
-          ./cs /tmp/cs-logical.cs > /tmp/cs-logical.out
-          grep -qx 'logical-ok' /tmp/cs-logical.out
-          grep -q 'history' /tmp/cs-history.out
-          printf '%s\n' 'true &' 'jobs' > /tmp/cs-jobs.cs
-          ./cs /tmp/cs-jobs.cs > /tmp/cs-jobs.out 2>&1
-          grep -q 'Running' /tmp/cs-jobs.out
-          clang -std=c23 -O2 -Wall -Wextra -Werror test_pty.c -lutil -o test_pty
-          ./test_pty
+          check_exact() {
+            printf '%s\n' "$@" > /tmp/cs-example-expected
+            diff -u /tmp/cs-example-expected /tmp/cs-example-output
+          }
+
+          run_example examples/basic.cs
+          check_exact hello world one two
+
+          run_example examples/variables.cs
+          check_exact 3 "name: cshell"
+
+          run_example examples/if.cs
+          check_exact if-ok
+
+          run_example examples/while.cs
+          check_exact 1 3
+
+          run_example examples/for.cs
+          check_exact 0 1 2
+
+          run_example examples/switch.cs
+          check_exact two
+
+          run_example examples/function.cs
+          check_exact 5
+
+          run_example examples/array.cs
+          check_exact main.c other.c 3 main.c other.c test.c
+
+          run_example examples/system_variable.cs system-one system-two
+          check_exact 0 2 examples/system_variable.cs system-one system-two
+
+          run_example examples/environment.cs
+          test -n "$(head -n1 /tmp/cs-example-output)"
+          test -n "$(tail -n1 /tmp/cs-example-output)"
+
+          run_example examples/arguments.cs argument-one argument-two
+          check_exact 2 examples/arguments.cs argument-one argument-two
+
+          run_example examples/strings.cs
+          check_exact "single quoted" "double quoted"
+
+          run_example examples/expressions.cs
+          grep -qx '13' /tmp/cs-example-output
+          grep -qx '30' /tmp/cs-example-output
+          grep -qx 'expression-ok' /tmp/cs-example-output
+
+          run_example examples/command_variable.cs
+          check_exact command-variable-ok
+
+          run_example examples/redirection.cs
+          check_exact first second error
+
+          run_example examples/pipe.cs
+          check_exact 3
+
+          run_example examples/glob.cs
+          grep -q 'examples/array.cs' /tmp/cs-example-output
+
+          run_example examples/command_substitution.cs
+          check_exact substituted
+
+          run_example examples/background.cs
+          grep -q 'Running' /tmp/cs-example-output
+
+          run_example examples/alias_history.cs
+          grep -q 'alias-ok' /tmp/cs-example-output
+
+          run_example examples/functions_return.cs
+          check_exact returned
+
+          run_example examples/cd_exit.cs
+          check_exact /tmp
+
+          run_example examples/unset.cs
+          check_exact present 0
+
+          set +e
+          ./cs examples/exit.cs > /tmp/cs-example-output
+          exit_status=$?
+          set -e
+          test "$exit_status" -eq 7
