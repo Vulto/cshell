@@ -156,7 +156,18 @@ static void FreeArgs(Args*a){for(size_t i=0;i<a->n;i++)free(a->a[i].s);free(a->a
 static int RunText(Runtime*r,const char*src);static void SetStatus(Runtime*r,int status){r->status=status;char b[32];snprintf(b,sizeof b,"%d",status);VarSetRaw(&r->vars,"status",b);}
 static char *ExpandVariables(Runtime*r,const char*s){
  size_t cap=strlen(s)+32,n=0;char*out=malloc(cap);if(!out)exit(2);
- for(size_t i=0;s[i];){if(s[i]!='
+ for(size_t i=0;s[i];){
+  if((unsigned char)s[i]!=36){if(n+2>cap){cap*=2;out=realloc(out,cap);}out[n++]=s[i++];continue;}
+  i++;char name[128];size_t m=0;
+  if(s[i]=='?'){strcpy(name,"status");i++;}
+  else if(isalpha((unsigned char)s[i])||s[i]=='_'){while((isalnum((unsigned char)s[i])||s[i]=='_')&&m+1<sizeof(name))name[m++]=s[i++];name[m]=0;}
+  else{if(n+2>cap){cap*=2;out=realloc(out,cap);}out[n++]=(char)36;continue;}
+  const char*v=!strcmp(name,"status")?VarGet(&r->vars,"status"):getenv(name);if(!v)v="";
+  size_t len=strlen(v);if(n+len+1>cap){while(n+len+1>cap)cap*=2;out=realloc(out,cap);}memcpy(out+n,v,len);n+=len;
+ }
+ out[n]=0;return out;
+}
+static char *ExpandArg(Runtime*r,Arg*x){return ExpandVariables(r,x->s);}
 static bool ApplyRedirs(Runtime*r,Redirs*rs){for(size_t i=0;i<rs->n;i++){Redir*x=&rs->a[i];const char*path=ExpandArg(r,&x->target);int flags=x->mode==0?O_RDONLY:(O_WRONLY|O_CREAT|(x->mode==2?O_APPEND:O_TRUNC));int fd=open(path,flags,0666);if(fd<0){fprintf(stderr,"cs: %s: %s\n",path,strerror(errno));return false;}if(dup2(fd,x->fd)<0){fprintf(stderr,"cs: dup2: %s\n",strerror(errno));close(fd);return false;}close(fd);}return true;}
 static char *CaptureCommand(Runtime*r,const char*src){
  int fd[2];if(pipe(fd)<0)return NULL;pid_t p=fork();if(p<0){close(fd[0]);close(fd[1]);return NULL;}
