@@ -1,4 +1,8 @@
 name: build
+concurrency:
+  group: cshell-ci
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
