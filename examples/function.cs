@@ -1,5 +1,5 @@
 add(a, b) {
-    result = a + b
-    return result
+    echo a + b
+    return 0
 }
-echo add(2, 3)
+add(2, 3)
