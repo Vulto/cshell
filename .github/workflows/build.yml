@@ -46,7 +46,7 @@ jobs:
           ./cs /tmp/cs-build.cs
           test -x /tmp/cs-built
 
-          printf '%s\n' 'false' 'if ($? == 1 && !(1 == 0) || 0) { echo logical-ok }' > /tmp/cs-logical.cs
+          printf '%s\n' 'false' 'if (status == 1 && !(1 == 0) || 0) { echo logical-ok }' > /tmp/cs-logical.cs
           ./cs /tmp/cs-logical.cs > /tmp/cs-logical.out
           grep -qx 'logical-ok' /tmp/cs-logical.out
           grep -q 'history' /tmp/cs-history.out
