@@ -109,6 +109,43 @@ jobs:
           run_example examples/unset.cs
           check_exact present 0
 
+          run_example examples/integration.cs
+          check_exact control-ok function-ok alias-ok substitution-ok 2 integration-ok
+
+          echo "RUN interactive completion and job-control integration" >&2
+          completion_dir=$(mktemp -d)
+          completion_bin="$completion_dir/bin"
+          mkdir -p "$completion_bin"
+          cp "$(command -v true)" "$completion_bin/cstest-command"
+          printf '%s\\n' path-ok > "$completion_dir/completion file.txt"
+          completion_input=$(mktemp)
+          completion_log=$(mktemp)
+          cat > "$completion_input" <<'EOF'
+cstest	
+printf "x" | cstest	
+if (1) {
+ech	 "multiline-ok"
+}
+cat 'completion	'
+sleep 1 &
+jobs
+fg 1
+alias ll = echo
+ll "alias-ok"
+exit
+EOF
+          (
+            cd "$completion_dir"
+            PATH="$completion_bin:$PATH" script -qefc "$GITHUB_WORKSPACE/cs" "$completion_log" < "$completion_input" >/dev/null
+          )
+          grep -a -q 'cstest-command' "$completion_log"
+          grep -a -q 'echo "multiline-ok"' "$completion_log"
+          grep -a -q "cat 'completion file.txt'" "$completion_log"
+          grep -a -q 'path-ok' "$completion_log"
+          grep -a -q 'Running' "$completion_log"
+          grep -a -q 'alias-ok' "$completion_log"
+          rm -rf "$completion_dir" "$completion_input" "$completion_log"
+
           set +e
           ./cs examples/exit.cs > /tmp/cs-example-output
           exit_status=$?
