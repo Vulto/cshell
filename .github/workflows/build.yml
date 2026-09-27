@@ -73,6 +73,7 @@ jobs:
           test "$(cat /tmp/cs-example-output)" = $'single quoted\ndouble quoted'
 
           run_example examples/expressions.cs
+          cat /tmp/cs-example-output
           grep -qx '13' /tmp/cs-example-output
           grep -qx '30' /tmp/cs-example-output
           grep -qx 'expression-ok' /tmp/cs-example-output
