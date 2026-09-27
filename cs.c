@@ -155,6 +155,7 @@ static Stmt *ParseStmt(Parser*p){SkipNL(p);if(Is(p,T_IF)){Pos q=p->t.p;Bump(p);N
 
 	typedef enum{FLOW_NONE,FLOW_BREAK,FLOW_CONTINUE,FLOW_RETURN,FLOW_EXIT} Flow;
 	typedef enum{JOB_RUNNING,JOB_STOPPED,JOB_DONE} JobState;typedef struct{int id;pid_t pgid;char*command;JobState state;int status;} Job;typedef struct{Job*a;size_t n,cap;int next_id;} Jobs;typedef struct Runtime Runtime;struct Runtime{Vars vars;Funcs funcs;Aliases aliases;History history;Jobs jobs;pid_t shell_pgid;bool job_control;int status;Flow flow;int returnStatus;bool interactive;};
+static Value Eval(Runtime*r,Expr*e);
 static void VarClearArray(Vars*v,const char*name){
  size_t n=strlen(name);
  for(size_t i=0;i<v->n;){
@@ -165,6 +166,7 @@ static void VarClearArray(Vars*v,const char*name){
  }
 }
 static void ArrayStore(Runtime*r,const char*name,Expr*e,Pos p){
+ (void)p;
  VarClearArray(&r->vars,name);char b[64],key[256];
  snprintf(b,sizeof b,"%zu",e->u.array.n);snprintf(key,sizeof key,"%s.length",name);VarSetRaw(&r->vars,key,b);
  for(size_t i=0;i<e->u.array.n;i++){Value v=Eval(r,e->u.array.a[i]);char*value=VStr(v);VFree(&v);snprintf(key,sizeof key,"%s[%zu]",name,i);VarSetRaw(&r->vars,key,value);free(value);}
