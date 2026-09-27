@@ -29,32 +29,31 @@ jobs:
             local output="/tmp/cs-example-output"
             ./cs "$file" "$@" >"$output"
             test -s "$output"
-            echo "PASS $file"
             cat "$output"
           }
 
-          run_example examples/basic.cs | grep -qx 'PASS examples/basic.cs'
-          run_example examples/variables.cs | grep -qx 'PASS examples/variables.cs'
-          run_example examples/if.cs | grep -qx 'PASS examples/if.cs'
-          run_example examples/while.cs | grep -qx 'PASS examples/while.cs'
-          run_example examples/for.cs | grep -qx 'PASS examples/for.cs'
-          run_example examples/switch.cs | grep -qx 'PASS examples/switch.cs'
-          run_example examples/function.cs | grep -qx 'PASS examples/function.cs'
-          run_example examples/array.cs | grep -qx 'PASS examples/array.cs'
-          run_example examples/system_variable.cs system-one system-two | grep -qx 'PASS examples/system_variable.cs'
-          run_example examples/environment.cs | grep -qx 'PASS examples/environment.cs'
-          run_example examples/arguments.cs argument-one argument-two | grep -qx 'PASS examples/arguments.cs'
-          run_example examples/strings.cs | grep -qx 'PASS examples/strings.cs'
-          run_example examples/expressions.cs | grep -qx 'PASS examples/expressions.cs'
-          run_example examples/command_variable.cs | grep -qx 'PASS examples/command_variable.cs'
-          run_example examples/redirection.cs | grep -qx 'PASS examples/redirection.cs'
-          run_example examples/pipe.cs | grep -qx 'PASS examples/pipe.cs'
-          run_example examples/glob.cs | grep -qx 'PASS examples/glob.cs'
-          run_example examples/command_substitution.cs | grep -qx 'PASS examples/command_substitution.cs'
-          run_example examples/background.cs | grep -qx 'PASS examples/background.cs'
-          run_example examples/alias_history.cs | grep -qx 'PASS examples/alias_history.cs'
-          run_example examples/functions_return.cs | grep -qx 'PASS examples/functions_return.cs'
-          run_example examples/cd_exit.cs | grep -qx 'PASS examples/cd_exit.cs'
+          run_example examples/basic.cs
+          run_example examples/variables.cs
+          run_example examples/if.cs
+          run_example examples/while.cs
+          run_example examples/for.cs
+          run_example examples/switch.cs
+          run_example examples/function.cs
+          run_example examples/array.cs
+          run_example examples/system_variable.cs system-one system-two
+          run_example examples/environment.cs
+          run_example examples/arguments.cs argument-one argument-two
+          run_example examples/strings.cs
+          run_example examples/expressions.cs
+          run_example examples/command_variable.cs
+          run_example examples/redirection.cs
+          run_example examples/pipe.cs
+          run_example examples/globbing.cs
+          run_example examples/command_substitution.cs
+          run_example examples/background.cs
+          run_example examples/alias_history.cs
+          run_example examples/functions_return.cs
+          run_example examples/cd_exit.cs
 
           grep -q 'hello' < <(./cs examples/basic.cs)
           grep -q '3' < <(./cs examples/variables.cs)
@@ -72,7 +71,7 @@ jobs:
           grep -qx 'command-variable-ok' < <(./cs examples/command_variable.cs)
           test "$(./cs examples/redirection.cs)" = 'redirect-ok'
           test "$(./cs examples/pipe.cs)" = '3'
-          grep -q 'examples/array.cs' < <(./cs examples/glob.cs)
+          grep -q 'examples/array.cs' < <(./cs examples/globbing.cs)
           test "$(./cs examples/command_substitution.cs)" = 'substituted'
           grep -q 'Running' < <(./cs examples/background.cs)
           grep -q 'alias-ok' < <(./cs examples/alias_history.cs)
