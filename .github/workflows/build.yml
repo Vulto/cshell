@@ -26,6 +26,7 @@ jobs:
           run_example() {
             local file="$1"
             shift
+            echo "RUN $file" >&2
             ./cs "$file" "$@" > /tmp/cs-example-output
           }
 
