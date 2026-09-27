@@ -1,0 +1,2 @@
+# Globbing
+echo examples/*.cs
