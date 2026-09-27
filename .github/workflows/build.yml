@@ -38,6 +38,13 @@ jobs:
           printf '%s\n' 'echo `echo substituted`' > /tmp/cs-sub.cs
           ./cs /tmp/cs-sub.cs > /tmp/cs-sub.out
           grep -qx 'substituted' /tmp/cs-sub.out
+          test -n "$HOME"
+          printf '%s\n' 'echo "$HOME"' > /tmp/cs-env.cs
+          ./cs /tmp/cs-env.cs > /tmp/cs-env.out
+          test -n "$(cat /tmp/cs-env.out)"
+          printf '%s\n' 'false' 'if ($? == 1 && !(1 == 0) || 0) { echo logical-ok }' > /tmp/cs-logical.cs
+          ./cs /tmp/cs-logical.cs > /tmp/cs-logical.out
+          grep -qx 'logical-ok' /tmp/cs-logical.out
           grep -q 'history' /tmp/cs-history.out
           printf '%s\n' 'true &' 'jobs' > /tmp/cs-jobs.cs
           ./cs /tmp/cs-jobs.cs > /tmp/cs-jobs.out 2>&1
