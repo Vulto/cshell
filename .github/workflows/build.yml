@@ -26,3 +26,6 @@ jobs:
           printf '%s\n' 'echo *.cs' > /tmp/cs-glob.cs
           ./cs /tmp/cs-glob.cs > /tmp/cs-glob.out
           grep -q 'example.cs' /tmp/cs-glob.out
+          printf '%s\n' 'alias ll = "echo alias"' 'll' 'history' | ./cs > /tmp/cs-history.out
+          grep -q 'alias' /tmp/cs-history.out
+          grep -q 'history' /tmp/cs-history.out
