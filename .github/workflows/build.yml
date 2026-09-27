@@ -53,6 +53,7 @@ jobs:
           grep -qx 'two' /tmp/cs-example-output
 
           run_example examples/function.cs
+          cat /tmp/cs-example-output
           grep -qx '5' /tmp/cs-example-output
 
           run_example examples/array.cs
