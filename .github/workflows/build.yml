@@ -120,20 +120,18 @@ jobs:
           printf '%s\\n' path-ok > "$completion_dir/completion file.txt"
           completion_input=$(mktemp)
           completion_log=$(mktemp)
-          cat > "$completion_input" <<'EOF'
-cstest	
-printf "x" | cstest	
-if (1) {
-ech	 "multiline-ok"
-}
-cat 'completion	'
-sleep 1 &
-jobs
-fg 1
-alias ll = echo
-ll "alias-ok"
-exit
-EOF
+          printf 'cstest\\t\\n' > "$completion_input"
+          printf 'printf "x" | cstest\\t\\n' >> "$completion_input"
+          printf 'if (1) {\\n' >> "$completion_input"
+          printf 'ech\\t "multiline-ok"\\n' >> "$completion_input"
+          printf '}\\n' >> "$completion_input"
+          printf "cat 'completion\\t'\\n" >> "$completion_input"
+          printf 'sleep 1 &\\n' >> "$completion_input"
+          printf 'jobs\\n' >> "$completion_input"
+          printf 'fg 1\\n' >> "$completion_input"
+          printf 'alias ll = echo\\n' >> "$completion_input"
+          printf 'll "alias-ok"\\n' >> "$completion_input"
+          printf 'exit\\n' >> "$completion_input"
           (
             cd "$completion_dir"
             PATH="$completion_bin:$PATH" script -qefc "$GITHUB_WORKSPACE/cs" "$completion_log" < "$completion_input" >/dev/null
