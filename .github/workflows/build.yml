@@ -113,8 +113,8 @@ jobs:
           check_exact control-ok function-ok alias-ok substitution-ok 2 integration-ok
 
           echo "RUN interactive completion and job-control integration" >&2
-          clang -std=c23 -O2 -Wall -Wextra -Werror tests/interactive.c -o /tmp/cshell-interactive-test -lutil
-          /tmp/cshell-interactive-test ./cs
+          clang -std=c23 -O2 -Wall -Wextra -Werror tests/interactive.c -o /tmp/cshell-completion-test
+          /tmp/cshell-completion-test
 
           set +e
           ./cs examples/exit.cs > /tmp/cs-example-output
