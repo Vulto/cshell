@@ -56,10 +56,12 @@ static const char *VarGet(Vars *v,const char *n){int i=VarIndex(v,n);return i<0?
 static void VarSetRaw(Vars *v,const char *n,const char *x){int i=VarIndex(v,n);if(i<0){if(v->n==v->cap){v->cap=v->cap?v->cap*2:32;v->v=realloc(v->v,v->cap*sizeof(*v->v));}i=(int)v->n++;v->v[i].name=Dup(n);v->v[i].value=NULL;}free(v->v[i].value);v->v[i].value=Dup(x);}
 static bool VarUnset(Vars *v,const char *n){int i=VarIndex(v,n);if(i<0)return false;free(v->v[i].name);free(v->v[i].value);v->v[i]=v->v[--v->n];return true;}
 
-typedef enum { E_NUM,E_STR,E_VAR,E_ENV,E_ASSIGN,E_INC,E_UNARY,E_BINARY } EKind;
-typedef struct Expr Expr;struct Expr{EKind k;Pos p;union{long long n;char *s,*name;struct{char *name;Expr *rhs;}assign;struct{char *name;}inc;struct{int op;Expr *a;}unary;struct{int op;Expr *a,*b;}binary;}u;};
+typedef enum { E_NUM,E_STR,E_VAR,E_ENV,E_ASSIGN,E_INC,E_UNARY,E_BINARY,E_INDEX,E_LENGTH,E_ARRAY } EKind;
+typedef struct Expr Expr;
+typedef struct { Expr **a; size_t n,cap; } ArrayLit;
+struct Expr{EKind k;Pos p;union{long long n;char *s,*name;struct{Expr *lhs,*rhs;}assign;struct{char *name;}inc;struct{int op;Expr *a;}unary;struct{int op;Expr *a,*b;}binary;struct{Expr *base,*index;}index;struct{char *name;}length;ArrayLit array;}u;};
 static Expr *ENew(EKind k,Pos p){Expr *e=calloc(1,sizeof(*e));if(!e)exit(2);e->k=k;e->p=p;return e;}
-static void EFree(Expr *e){if(!e)return;switch(e->k){case E_STR:free(e->u.s);break;case E_VAR:free(e->u.name);break;case E_ENV:free(e->u.name);break;case E_ASSIGN:free(e->u.assign.name);EFree(e->u.assign.rhs);break;case E_INC:free(e->u.inc.name);break;case E_UNARY:EFree(e->u.unary.a);break;case E_BINARY:EFree(e->u.binary.a);EFree(e->u.binary.b);break;default:break;}free(e);}
+static void EFree(Expr *e){if(!e)return;switch(e->k){case E_STR:free(e->u.s);break;case E_VAR:free(e->u.name);break;case E_ENV:free(e->u.name);break;case E_ASSIGN:EFree(e->u.assign.lhs);EFree(e->u.assign.rhs);break;case E_INC:free(e->u.inc.name);break;case E_UNARY:EFree(e->u.unary.a);break;case E_BINARY:EFree(e->u.binary.a);EFree(e->u.binary.b);break;case E_INDEX:EFree(e->u.index.base);EFree(e->u.index.index);break;case E_LENGTH:free(e->u.length.name);break;case E_ARRAY:for(size_t i=0;i<e->u.array.n;i++)EFree(e->u.array.a[i]);free(e->u.array.a);break;default:break;}free(e);}
 
 typedef struct Stmt Stmt;typedef struct{Stmt **a;size_t n,cap;} Stmts;static void SPush(Stmts *s,Stmt *x){if(s->n==s->cap){s->cap=s->cap?s->cap*2:16;s->a=realloc(s->a,s->cap*sizeof(*s->a));}s->a[s->n++]=x;}
 typedef struct{char *s;bool quoted;bool number;} Arg;typedef struct{Arg *a;size_t n,cap;} Args;typedef struct{int fd;int mode;Arg target;} Redir;typedef struct{Redir *a;size_t n,cap;} Redirs;static void RPush(Redirs*r,Redir x){if(r->n==r->cap){r->cap=r->cap?r->cap*2:4;r->a=realloc(r->a,r->cap*sizeof(*r->a));}r->a[r->n++]=x;}static void APush(Args *a,Arg x){if(a->n==a->cap){a->cap=a->cap?a->cap*2:8;a->a=realloc(a->a,a->cap*sizeof(*a->a));}a->a[a->n++]=x;}
@@ -76,19 +78,23 @@ static void Bump(Parser*p){FreeTok(&p->t);p->t=p->n;p->n=Next(&p->l);}static boo
 static int Prec(Kind k){switch(k){case T_OR:return 1;case T_AND:return 2;case T_EQ:case T_NE:return 3;case T_LT:case T_LE:case T_GT:case T_GE:return 4;case T_PLUS:case T_MINUS:return 5;case T_STAR:case T_SLASH:case T_MOD:return 6;default:return 0;}}
 static int BOp(Kind k){return (int)k;}
 static Expr *ParseExpr(Parser*p);static Stmts ParseBlock(Parser*p);static Stmt *ParseStmt(Parser*p);
+static void ArrayPush(ArrayLit*a,Expr*x){if(a->n==a->cap){a->cap=a->cap?a->cap*2:8;a->a=realloc(a->a,a->cap*sizeof(*a->a));}a->a[a->n++]=x;}
+static Expr *ParseArray(Parser*p){Pos q=p->t.p;Bump(p);Expr*e=ENew(E_ARRAY,q);SkipNL(p);if(Is(p,T_RBRACK)){Bump(p);return e;}for(;;){ArrayPush(&e->u.array,ParseExpr(p));SkipNL(p);if(Is(p,T_COMMA)){Bump(p);SkipNL(p);continue;}if(Is(p,T_RBRACK)){Bump(p);return e;}Fatal(p->t.p,"expected ',' or ']' in array");}}
 static Expr *Primary(Parser*p){
- Pos q=p->t.p;
- if(Is(p,T_NUM)){Expr*e=ENew(E_NUM,q);e->u.n=p->t.n;Bump(p);return e;}
- if(Is(p,T_STR)){Expr*e=ENew(E_STR,q);e->u.s=p->t.s;p->t.s=NULL;Bump(p);return e;}
- if(Is(p,T_ID)){Expr*e=ENew(E_VAR,q);e->u.name=p->t.s;p->t.s=NULL;Bump(p);return e;}
- if(Is(p,T_DOLLAR)){Bump(p);Expr*e=ENew(E_ENV,q);if(!Is(p,T_ID)&&!Is(p,T_QMARK))Fatal(q,"expected environment variable name after environment marker");if(Is(p,T_QMARK))e->u.name=Dup("?");else{e->u.name=p->t.s;p->t.s=NULL;}Bump(p);return e;}
- if(Is(p,T_LP)){Bump(p);Expr*e=ParseExpr(p);Need(p,T_RP,"')'");return e;}
- Fatal(q,"expected expression");return NULL;}
+ Pos q=p->t.p;Expr*e=NULL;
+ if(Is(p,T_NUM)){e=ENew(E_NUM,q);e->u.n=p->t.n;Bump(p);}
+ else if(Is(p,T_STR)){e=ENew(E_STR,q);e->u.s=p->t.s;p->t.s=NULL;Bump(p);}
+ else if(Is(p,T_ID)){e=ENew(E_VAR,q);e->u.name=p->t.s;p->t.s=NULL;Bump(p);}
+ else if(Is(p,T_DOLLAR)){Bump(p);e=ENew(E_ENV,q);if(!Is(p,T_ID)&&!Is(p,T_QMARK))Fatal(q,"expected environment variable name after environment marker");if(Is(p,T_QMARK))e->u.name=Dup("?");else{e->u.name=p->t.s;p->t.s=NULL;}Bump(p);}
+ else if(Is(p,T_LP)){Bump(p);e=ParseExpr(p);Need(p,T_RP,"')'");}
+ else if(Is(p,T_LBRACK))return ParseArray(p);
+ else Fatal(q,"expected expression");
+ for(;;){if(Is(p,T_LBRACK)){Pos p0=p->t.p;Bump(p);Expr*i=ParseExpr(p);Need(p,T_RBRACK,"']'");Expr*x=ENew(E_INDEX,p0);x->u.index.base=e;x->u.index.index=i;e=x;continue;}if(Is(p,T_DOT)){Pos p0=p->t.p;Bump(p);if(!Is(p,T_ID)||strcmp(p->t.s,"length"))Fatal(p->t.p,"expected 'length' after '.'");Bump(p);if(e->k!=E_VAR)Fatal(p0,"'.length' requires an array variable");Expr*x=ENew(E_LENGTH,p0);x->u.length.name=Dup(e->u.name);EFree(e);e=x;continue;}break;}return e;}
 static Expr *Unary(Parser*p){Pos q=p->t.p;if(Is(p,T_INC)){Bump(p);if(!Is(p,T_ID))Fatal(q,"expected variable after ++");Expr*e=ENew(E_INC,q);e->u.inc.name=p->t.s;p->t.s=NULL;Bump(p);return e;}if(Is(p,T_NOT)||Is(p,T_MINUS)){Kind k=p->t.k;Bump(p);Expr*e=ENew(E_UNARY,q);e->u.unary.op=(int)k;e->u.unary.a=Unary(p);return e;}return Primary(p);}
 static Expr *Bin(Parser*p,int min,Expr*lhs){for(;;){int pr=Prec(p->t.k);if(pr<min)return lhs;Kind op=p->t.k;Pos q=p->t.p;Bump(p);Expr*r=Unary(p);int np=Prec(p->t.k);if(np>pr)r=Bin(p,pr+1,r);Expr*e=ENew(E_BINARY,q);e->u.binary.op=BOp(op);e->u.binary.a=lhs;e->u.binary.b=r;lhs=e;}}
-static Expr *ParseExpr(Parser*p){Expr*l=Unary(p);if(l->k==E_VAR&&Is(p,T_ASSIGN)){char *n=l->u.name;Pos q=l->p;free(l);Bump(p);Expr*e=ENew(E_ASSIGN,q);e->u.assign.name=n;e->u.assign.rhs=ParseExpr(p);return e;}return Bin(p,1,l);}
+static Expr *ParseExpr(Parser*p){Expr*l=Unary(p);if((l->k==E_VAR||l->k==E_INDEX)&&Is(p,T_ASSIGN)){Pos q=l->p;Bump(p);Expr*e=ENew(E_ASSIGN,q);e->u.assign.lhs=l;e->u.assign.rhs=ParseExpr(p);return e;}return Bin(p,1,l);}
 
-static bool StartsExpr(Parser*p){return Is(p,T_INC)||Is(p,T_NOT)||Is(p,T_MINUS)||Is(p,T_LP)||Is(p,T_NUM)||Is(p,T_STR)||(Is(p,T_ID)&&(p->n.k==T_ASSIGN));}
+static bool StartsExpr(Parser*p){return Is(p,T_INC)||Is(p,T_NOT)||Is(p,T_MINUS)||Is(p,T_LP)||Is(p,T_NUM)||Is(p,T_STR)||Is(p,T_LBRACK)||(Is(p,T_ID)&&(p->n.k==T_ASSIGN||p->n.k==T_LBRACK));}
 static Stmts ParseBlock(Parser*p){Stmts s={0};Need(p,T_LB,"'{'");while(!Is(p,T_RB)){if(Is(p,T_EOF))Fatal(p->t.p,"unterminated block");SkipNL(p);if(Is(p,T_RB))break;SPush(&s,ParseStmt(p));}Need(p,T_RB,"'}'");return s;}
 static Args ParseArgs(Parser*p, bool paren){Args a={0};if(paren){Need(p,T_LP,"'('");if(Is(p,T_RP)){Bump(p);return a;}}for(;;){if(Is(p,T_EOF)||Is(p,T_NL)||Is(p,T_SEMI)||Is(p,T_RP))break;if(Is(p,T_COMMA)){Bump(p);continue;}if(Is(p,T_ID)||Is(p,T_NUM)||Is(p,T_STR)){Arg x={0};if(Is(p,T_STR)){x.s=p->t.s;p->t.s=NULL;}else{x.s=Dup(Is(p,T_ID)?p->t.s:"");}if(Is(p,T_NUM)){char b[64];snprintf(b,sizeof b,"%lld",p->t.n);free(x.s);x.s=Dup(b);x.number=true;}x.quoted=Is(p,T_STR);APush(&a,x);Bump(p);continue;}Fatal(p->t.p,"invalid command/function argument");}if(paren)Need(p,T_RP,"')'");return a;}
 static bool WordFragment(Kind k){return k==T_ID||k==T_NUM||k==T_MINUS||k==T_PLUS||k==T_STAR||k==T_SLASH||k==T_MOD||k==T_COLON||k==T_COMMA||k==T_ASSIGN||k==T_DOT||k==T_QMARK||k==T_LBRACK||k==T_RBRACK;}
@@ -150,7 +156,31 @@ static Stmt *ParseStmt(Parser*p){SkipNL(p);if(Is(p,T_IF)){Pos q=p->t.p;Bump(p);N
 	typedef enum{FLOW_NONE,FLOW_BREAK,FLOW_CONTINUE,FLOW_RETURN,FLOW_EXIT} Flow;
 	typedef enum{JOB_RUNNING,JOB_STOPPED,JOB_DONE} JobState;typedef struct{int id;pid_t pgid;char*command;JobState state;int status;} Job;typedef struct{Job*a;size_t n,cap;int next_id;} Jobs;typedef struct Runtime Runtime;struct Runtime{Vars vars;Funcs funcs;Aliases aliases;History history;Jobs jobs;pid_t shell_pgid;bool job_control;int status;Flow flow;int returnStatus;bool interactive;};
 static Value Eval(Runtime*r,Expr*e);
-static Value Eval(Runtime*r,Expr*e){Value z={0};switch(e->k){case E_NUM:z.isInt=true;z.n=e->u.n;return z;case E_STR:z.s=Dup(e->u.s);return z;case E_VAR:{const char*v=VarGet(&r->vars,e->u.name);if(!v)Fatal(e->p,"undefined variable '%s'",e->u.name);z.s=Dup(v);return z;}case E_ENV:{const char*v=getenv(e->u.name);z.s=Dup(v?v:"");return z;}case E_ASSIGN:{Value v=Eval(r,e->u.assign.rhs);char *s=VStr(v);VFree(&v);VarSetRaw(&r->vars,e->u.assign.name,s);z.s=Dup(s);free(s);return z;}case E_INC:{const char*v=VarGet(&r->vars,e->u.inc.name);if(!v)Fatal(e->p,"undefined variable '%s'",e->u.inc.name);long long n=ToInt(v,e->p)+1;char b[64];snprintf(b,sizeof b,"%lld",n);VarSetRaw(&r->vars,e->u.inc.name,b);z.isInt=true;z.n=n;return z;}case E_UNARY:{Value a=Eval(r,e->u.unary.a);if(e->u.unary.op==T_NOT){z.isBool=true;z.b=!Truth(a);}else{long long n=a.isInt?a.n:ToInt(VStr(a),e->p);z.isInt=true;z.n=-n;}VFree(&a);return z;}case E_BINARY:{if(e->u.binary.op==T_AND){Value a=Eval(r,e->u.binary.a);bool t=Truth(a);VFree(&a);if(!t){z.isBool=true;z.b=false;return z;}Value b=Eval(r,e->u.binary.b);z.isBool=true;z.b=Truth(b);VFree(&b);return z;}if(e->u.binary.op==T_OR){Value a=Eval(r,e->u.binary.a);bool t=Truth(a);VFree(&a);if(t){z.isBool=true;z.b=true;return z;}Value b=Eval(r,e->u.binary.b);z.isBool=true;z.b=Truth(b);VFree(&b);return z;}Value a=Eval(r,e->u.binary.a),b=Eval(r,e->u.binary.b);int op=e->u.binary.op;long long ai=0,bi=0;bool an=false,bn=false;if(a.isInt){ai=a.n;an=true;}else if(a.s) {char*e1;ai=strtoll(a.s,&e1,10);an=*a.s&&!*e1;}if(b.isInt){bi=b.n;bn=true;}else if(b.s){char*e1;bi=strtoll(b.s,&e1,10);bn=*b.s&&!*e1;}if(op==T_PLUS||op==T_MINUS||op==T_STAR||op==T_SLASH||op==T_MOD||op==T_LT||op==T_LE||op==T_GT||op==T_GE){if(!an||!bn)Fatal(e->p,"numeric expression requires integer values");z.isInt=op<T_LT||op==T_PLUS||op==T_MINUS||op==T_STAR||op==T_SLASH||op==T_MOD;switch(op){case T_PLUS:z.n=ai+bi;break;case T_MINUS:z.n=ai-bi;break;case T_STAR:z.n=ai*bi;break;case T_SLASH:if(!bi)Fatal(e->p,"division by zero");z.n=ai/bi;break;case T_MOD:if(!bi)Fatal(e->p,"division by zero");z.n=ai%bi;break;case T_LT:z.isBool=true;z.b=ai<bi;break;case T_LE:z.isBool=true;z.b=ai<=bi;break;case T_GT:z.isBool=true;z.b=ai>bi;break;case T_GE:z.isBool=true;z.b=ai>=bi;break;}VFree(&a);VFree(&b);return z;}char *as=VStr(a),*bs=VStr(b);int cmp=strcmp(as,bs);z.isBool=true;z.b=(op==T_EQ)?cmp==0:(op==T_NE)?cmp!=0:false;VFree(&a);VFree(&b);free(as);free(bs);return z;}default:return z;}}
+static void VarClearArray(Vars*v,const char*name){
+ size_t n=strlen(name);
+ for(size_t i=0;i<v->n;){
+  const char*s=v->v[i].name;
+  bool match=!strncmp(s,name,n)&&((s[n]=='[')||(s[n]=='.'&&!strcmp(s+n,".length")));
+  if(!match){i++;continue;}
+  free(v->v[i].name);free(v->v[i].value);v->v[i]=v->v[--v->n];
+ }
+}
+static void ArrayStore(Runtime*r,const char*name,Expr*e,Pos p){
+ (void)p;
+ VarClearArray(&r->vars,name);char b[64],key[256];
+ snprintf(b,sizeof b,"%zu",e->u.array.n);snprintf(key,sizeof key,"%s.length",name);VarSetRaw(&r->vars,key,b);
+ for(size_t i=0;i<e->u.array.n;i++){Value v=Eval(r,e->u.array.a[i]);char*value=VStr(v);VFree(&v);snprintf(key,sizeof key,"%s[%zu]",name,i);VarSetRaw(&r->vars,key,value);free(value);}
+}
+static char *ResolveVar(Runtime*r,const char*s){
+ const char*v=VarGet(&r->vars,s);if(v)return Dup(v);const char*lb=strchr(s,'[');size_t n=strlen(s);
+ if(!lb||n<3||s[n-1]!=']'||lb==s)return NULL;
+ char base[256],idx[128];size_t bn=(size_t)(lb-s),in=n-bn-2;if(bn>=sizeof base||in>=sizeof idx)return NULL;
+ memcpy(base,s,bn);base[bn]=0;memcpy(idx,lb+1,in);idx[in]=0;const char*iv=VarGet(&r->vars,idx);const char*index=iv?iv:idx;
+ for(size_t i=0;index[i];i++)if(!isdigit((unsigned char)index[i]))return NULL;
+ char key[512];snprintf(key,sizeof key,"%s[%s]",base,index);v=VarGet(&r->vars,key);return v?Dup(v):NULL;
+}
+static Value Eval(Runtime*r,Expr*e);
+static Value Eval(Runtime*r,Expr*e){Value z={0};switch(e->k){case E_NUM:z.isInt=true;z.n=e->u.n;return z;case E_STR:z.s=Dup(e->u.s);return z;case E_VAR:{const char*v=VarGet(&r->vars,e->u.name);if(!v)Fatal(e->p,"undefined variable '%s'",e->u.name);z.s=Dup(v);return z;}case E_ENV:{const char*v=getenv(e->u.name);z.s=Dup(v?v:"");return z;}case E_INDEX:{if(e->u.index.base->k!=E_VAR)Fatal(e->p,"invalid array base");Value i=Eval(r,e->u.index.index);char*is=VStr(i);long long n=ToInt(is,e->p);free(is);VFree(&i);if(n<0)Fatal(e->p,"array index cannot be negative");char key[512];snprintf(key,sizeof key,"%s[%lld]",e->u.index.base->u.name,n);const char*v=VarGet(&r->vars,key);if(!v)Fatal(e->p,"array index out of bounds");z.s=Dup(v);return z;}case E_LENGTH:{char key[512];snprintf(key,sizeof key,"%s.length",e->u.length.name);const char*v=VarGet(&r->vars,key);if(!v)Fatal(e->p,"undefined array '%s'",e->u.length.name);z.isInt=true;z.n=ToInt(v,e->p);return z;}case E_ARRAY:Fatal(e->p,"array literal cannot be used here");case E_ASSIGN:{if(e->u.assign.lhs->k==E_VAR&&e->u.assign.rhs->k==E_ARRAY){ArrayStore(r,e->u.assign.lhs->u.name,e->u.assign.rhs,e->p);z.s=Dup("");return z;}Value v=Eval(r,e->u.assign.rhs);char *s=VStr(v);VFree(&v);if(e->u.assign.lhs->k==E_VAR){VarClearArray(&r->vars,e->u.assign.lhs->u.name);VarSetRaw(&r->vars,e->u.assign.lhs->u.name,s);}else if(e->u.assign.lhs->k==E_INDEX){if(e->u.assign.lhs->u.index.base->k!=E_VAR)Fatal(e->p,"invalid array assignment");Value i=Eval(r,e->u.assign.lhs->u.index.index);char*is=VStr(i);long long n=ToInt(is,e->p);free(is);VFree(&i);if(n<0)Fatal(e->p,"array index cannot be negative");char key[512],lenkey[512];snprintf(key,sizeof key,"%s[%lld]",e->u.assign.lhs->u.index.base->u.name,n);snprintf(lenkey,sizeof lenkey,"%s.length",e->u.assign.lhs->u.index.base->u.name);const char*lv=VarGet(&r->vars,lenkey);if(!lv)Fatal(e->p,"undefined array '%s'",e->u.assign.lhs->u.index.base->u.name);if(n>=ToInt(lv,e->p))Fatal(e->p,"array index out of bounds");VarSetRaw(&r->vars,key,s);}free(s);z.s=Dup(s);return z;}case E_INC:{const char*v=VarGet(&r->vars,e->u.inc.name);if(!v)Fatal(e->p,"undefined variable '%s'",e->u.inc.name);long long n=ToInt(v,e->p)+1;char b[64];snprintf(b,sizeof b,"%lld",n);VarSetRaw(&r->vars,e->u.inc.name,b);z.isInt=true;z.n=n;return z;}case E_UNARY:{Value a=Eval(r,e->u.unary.a);if(e->u.unary.op==T_NOT){z.isBool=true;z.b=!Truth(a);}else{long long n=a.isInt?a.n:ToInt(VStr(a),e->p);z.isInt=true;z.n=-n;}VFree(&a);return z;}case E_BINARY:{if(e->u.binary.op==T_AND){Value a=Eval(r,e->u.binary.a);bool t=Truth(a);VFree(&a);if(!t){z.isBool=true;z.b=false;return z;}Value b=Eval(r,e->u.binary.b);z.isBool=true;z.b=Truth(b);VFree(&b);return z;}if(e->u.binary.op==T_OR){Value a=Eval(r,e->u.binary.a);bool t=Truth(a);VFree(&a);if(t){z.isBool=true;z.b=true;return z;}Value b=Eval(r,e->u.binary.b);z.isBool=true;z.b=Truth(b);VFree(&b);return z;}Value a=Eval(r,e->u.binary.a),b=Eval(r,e->u.binary.b);int op=e->u.binary.op;long long ai=0,bi=0;bool an=false,bn=false;if(a.isInt){ai=a.n;an=true;}else if(a.s) {char*e1;ai=strtoll(a.s,&e1,10);an=*a.s&&!*e1;}if(b.isInt){bi=b.n;bn=true;}else if(b.s){char*e1;bi=strtoll(b.s,&e1,10);bn=*b.s&&!*e1;}if(op==T_PLUS||op==T_MINUS||op==T_STAR||op==T_SLASH||op==T_MOD||op==T_LT||op==T_LE||op==T_GT||op==T_GE){if(!an||!bn)Fatal(e->p,"numeric expression requires integer values");z.isInt=op<T_LT||op==T_PLUS||op==T_MINUS||op==T_STAR||op==T_SLASH||op==T_MOD;switch(op){case T_PLUS:z.n=ai+bi;break;case T_MINUS:z.n=ai-bi;break;case T_STAR:z.n=ai*bi;break;case T_SLASH:if(!bi)Fatal(e->p,"division by zero");z.n=ai/bi;break;case T_MOD:if(!bi)Fatal(e->p,"division by zero");z.n=ai%bi;break;case T_LT:z.isBool=true;z.b=ai<bi;break;case T_LE:z.isBool=true;z.b=ai<=bi;break;case T_GT:z.isBool=true;z.b=ai>bi;break;case T_GE:z.isBool=true;z.b=ai>=bi;break;}VFree(&a);VFree(&b);return z;}char *as=VStr(a),*bs=VStr(b);int cmp=strcmp(as,bs);z.isBool=true;z.b=(op==T_EQ)?cmp==0:(op==T_NE)?cmp!=0:false;VFree(&a);VFree(&b);free(as);free(bs);return z;}default:return z;}}
 
 static void FreeArgs(Args*a){for(size_t i=0;i<a->n;i++)free(a->a[i].s);free(a->a);}
 static int RunText(Runtime*r,const char*src);static void SetStatus(Runtime*r,int status){r->status=status;char b[32];snprintf(b,sizeof b,"%d",status);VarSetRaw(&r->vars,"status",b);}
@@ -181,9 +211,10 @@ static void ArgvPush(char***av,size_t*n,size_t*cap,const char*s){if(*n+1>=*cap){
 static char **BuildArgv(Runtime*r,Args*a){
  size_t cap=a->n*2+8,n=0;char**av=calloc(cap,sizeof(char*));
  for(size_t i=0;i<a->n;i++){Arg*x=&a->a[i];const char*value=NULL;bool script_var=false;
-  if(!x->quoted)value=VarGet(&r->vars,x->s);
-  if(value)script_var=true;else value=x->s;
-  char*variables=script_var?Dup(value):ExpandVariables(r,value);const char*v=variables;bool sub=false;
+  char *resolved=!x->quoted?ResolveVar(r,x->s):NULL;
+  if(resolved){value=resolved;script_var=true;}else value=x->s;
+  char*variables=script_var?Dup(value):ExpandVariables(r,value);
+  free(resolved);const char*v=variables;bool sub=false;
   char*expanded=ExpandBackquotes(r,v,&sub);free(variables);
   if(!x->quoted&&(script_var||sub)){char*save=NULL;for(char*part=strtok_r(expanded," \t\r\n",&save);part;part=strtok_r(NULL," \t\r\n",&save))ArgvPush(&av,&n,&cap,part);free(expanded);continue;}
   if(!x->quoted&&HasGlob(expanded)){glob_t g={0};int rc=glob(expanded,GLOB_NOCHECK,NULL,&g);if(rc==0){for(size_t j=0;j<g.gl_pathc;j++)ArgvPush(&av,&n,&cap,g.gl_pathv[j]);globfree(&g);free(expanded);continue;}globfree(&g);}
