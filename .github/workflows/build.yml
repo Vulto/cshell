@@ -17,3 +17,6 @@ jobs:
           printf 'echo "redirected"\n' > /tmp/cs-redirection.cs
           ./cs /tmp/cs-redirection.cs > /tmp/cs-redirection.out
           grep -qx 'redirected' /tmp/cs-redirection.out
+          printf 'printf "%s\\n" a b | wc -l\\n' > /tmp/cs-pipe.cs
+          ./cs /tmp/cs-pipe.cs > /tmp/cs-pipe.out
+          grep -qx '2' /tmp/cs-pipe.out
