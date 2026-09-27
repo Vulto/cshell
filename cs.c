@@ -4,6 +4,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <glob.h>
+#include <termios.h>
 #include <limits.h>
 #include <signal.h>
 #include <stdarg.h>
@@ -173,7 +174,23 @@ static char *ReadAll(FILE*f){size_t cap=8192,n=0;char*b=malloc(cap);for(;;){if(n
 static void SigInt(int x){(void)x;write(STDERR_FILENO,"\n",1);}
 static void SetScriptArgs(Runtime*r,int argc,char**argv){char b[64];int count=argc>1?argc-2:0;snprintf(b,sizeof b,"%d",count);VarSetRaw(&r->vars,"argc",b);VarSetRaw(&r->vars,"arg0",argc>1?argv[1]:"cs");for(int i=1;i<=count;i++){snprintf(b,sizeof b,"arg%d",i);VarSetRaw(&r->vars,b,argv[i+1]);}}
 static int RunText(Runtime*r,const char*src){Parser p={0};p.l.s=src;p.l.n=strlen(src);p.l.line=1;p.l.col=1;p.t=Next(&p.l);p.n=Next(&p.l);Stmts s=ParseProgram(&p);for(size_t i=0;i<s.n;i++){if(s.a[i]->k==S_FUNCDEF){Func f=s.a[i]->u.fd.f;bool exists=false;for(size_t j=0;j<r->funcs.n;j++)if(!strcmp(r->funcs.a[j].name,f.name)){exists=true;break;}if(!exists){FPush(&r->funcs,f);memset(&s.a[i]->u.fd.f,0,sizeof(s.a[i]->u.fd.f));}}}Execute(r,&s);for(size_t i=0;i<s.n;i++)FreeStmt(s.a[i]);free(s.a);FreeTok(&p.t);FreeTok(&p.n);return r->flow==FLOW_EXIT?r->returnStatus:r->status;}
-static int Interactive(Runtime*r){char*buf=NULL;size_t n=0,cap=0;int depth=0;for(;;){printf(depth?"> ":"cs> ");fflush(stdout);char line[4096];if(!fgets(line,sizeof line,stdin)){putchar('\n');break;}size_t m=strlen(line);if(n+m+1>cap){cap=(n+m+1)*2;buf=realloc(buf,cap);}memcpy(buf+n,line,m);n+=m;buf[n]=0;for(size_t i=n-m;i<n;i++){if(line[i-(n-m)]=='{')depth++;else if(line[i-(n-m)]=='}'&&depth>0)depth--;}if(depth||line[m?m-1:0]!='\n')continue;HistoryPush(&r->history,buf);RunText(r,buf);n=0;if(r->flow==FLOW_EXIT){free(buf);return r->returnStatus;}}free(buf);return r->status;}
+static bool CompletionChar(char c){return isalnum((unsigned char)c)||strchr("_-.+/~",c)!=NULL;}
+static size_t LongestPrefix(char **v,size_t n){if(!n)return 0;size_t p=strlen(v[0]);for(size_t i=1;i<n;i++){size_t j=0;while(j<p&&v[0][j]&&v[i][j]&&v[0][j]==v[i][j])j++;p=j;}return p;}
+static char *CommandCompletion(const char *prefix){
+ size_t cap=128,n=0;char **m=calloc(cap,sizeof(*m));const char *builtins[]={"cd","exit","unset","history","alias","unalias"};
+ for(size_t i=0;i<sizeof(builtins)/sizeof(builtins[0]);i++)if(!strncmp(builtins[i],prefix,strlen(prefix))){if(n==cap){cap*=2;m=realloc(m,cap*sizeof(*m));}m[n++]=Dup(builtins[i]);}
+ const char *path=getenv("PATH");if(path){char *copy=Dup(path),*save=NULL;for(char *dir=strtok_r(copy,":",&save);dir;dir=strtok_r(NULL,":",&save)){if(!*dir)dir=".";DIR*d=opendir(dir);if(!d)continue;struct dirent*e;while((e=readdir(d))){if(strncmp(e->d_name,prefix,strlen(prefix)))continue;char full[PATH_MAX];snprintf(full,sizeof full,"%s/%s",dir,e->d_name);if(access(full,X_OK))continue;bool seen=false;for(size_t k=0;k<n;k++)if(!strcmp(m[k],e->d_name)){seen=true;break;}if(seen)continue;if(n==cap){cap*=2;m=realloc(m,cap*sizeof(*m));}m[n++]=Dup(e->d_name);}closedir(d);}free(copy);}
+ if(!n){free(m);return NULL;}size_t p=LongestPrefix(m,n);char*out=DupN(m[0],p);for(size_t k=0;k<n;k++)free(m[k]);free(m);return out;}
+static int CompleteLine(char *buf,size_t *n,size_t cap){
+ size_t start=*n;while(start&&CompletionChar(buf[start-1]))start--;size_t len=*n-start;char prefix[PATH_MAX];if(len>=sizeof(prefix))return 0;memcpy(prefix,buf+start,len);prefix[len]=0;
+ bool command=true;for(size_t i=0;i<start;i++)if(!isspace((unsigned char)buf[i])){command=false;break;}
+ char *completion=NULL;if(command)completion=CommandCompletion(prefix);else{glob_t g={0};char pattern[PATH_MAX];snprintf(pattern,sizeof pattern,"%s*",prefix);if(glob(pattern,0,NULL,&g)==0&&g.gl_pathc==1){const char*p=strrchr(g.gl_pathv[0],'/');completion=Dup(p?p+1:g.gl_pathv[0]);if(strchr(prefix,'/')){free(completion);completion=Dup(g.gl_pathv[0]);}}globfree(&g);}
+ if(!completion||strlen(completion)<=len){free(completion);return 0;}size_t add=strlen(completion)-len;if(*n+add+1>=cap){free(completion);return 0;}memcpy(buf+*n,completion+len,add);*n+=add;buf[*n]=0;fwrite(completion+len,1,add,stdout);fflush(stdout);free(completion);return 1;}
+static int ReadInteractiveLine(char *buf,size_t cap){
+ struct termios old,raw;if(!isatty(STDIN_FILENO)||tcgetattr(STDIN_FILENO,&old)<0)return fgets(buf,cap,stdin)?(int)strlen(buf):-1;raw=old;raw.c_lflag&=~(ICANON|ECHO);raw.c_cc[VMIN]=1;raw.c_cc[VTIME]=0;if(tcsetattr(STDIN_FILENO,TCSAFLUSH,&raw)<0)return fgets(buf,cap,stdin)?(int)strlen(buf):-1;
+ size_t n=0;for(;;){unsigned char c;if(read(STDIN_FILENO,&c,1)!=1){tcsetattr(STDIN_FILENO,TCSAFLUSH,&old);return -1;}if(c=='\r'||c=='\n'){putchar('\n');buf[n]=0;tcsetattr(STDIN_FILENO,TCSAFLUSH,&old);buf[n++]='\n';buf[n]=0;return (int)n;}if(c==3){putchar('^');putchar('C');putchar('\n');n=0;buf[0]=0;tcsetattr(STDIN_FILENO,TCSAFLUSH,&old);return 0;}if(c==127||c=='\b'){if(n){n--;printf("\b \b");fflush(stdout);}continue;}if(c=='\t'){CompleteLine(buf,&n,cap);continue;}if(isprint(c)&&n+1<cap){buf[n++]=(char)c;putchar(c);fflush(stdout);}}
+}
+static int Interactive(Runtime*r){char*buf=NULL;size_t n=0,cap=0;int depth=0;for(;;){printf(depth?"> ":"cs> ");fflush(stdout);char line[4096];int m=ReadInteractiveLine(line,sizeof line);if(m<0){putchar('\n');break;}if(m==0)continue;size_t lm=(size_t)m;if(n+lm+1>cap){cap=(n+lm+1)*2;buf=realloc(buf,cap);}memcpy(buf+n,line,lm);n+=lm;buf[n]=0;for(size_t k=n-lm;k<n;k++){if(line[k-(n-lm)]=='{')depth++;else if(line[k-(n-lm)]=='}'&&depth>0)depth--;}if(depth||line[lm-1]!='\n')continue;HistoryPush(&r->history,buf);RunText(r,buf);n=0;if(r->flow==FLOW_EXIT){free(buf);return r->returnStatus;}}free(buf);return r->status;}
 extern char **environ;
 static void ImportEnvironment(Runtime*r){for(char **e=environ;e&&*e;e++){char *eq=strchr(*e,'=');if(!eq||eq==*e)continue;char *name=DupN(*e,(size_t)(eq-*e));if(isalpha((unsigned char)name[0])||name[0]=='_'){bool valid=true;for(size_t i=1;name[i];i++)if(!isalnum((unsigned char)name[i])&&name[i]!='_'){valid=false;break;}if(valid)VarSetRaw(&r->vars,name,eq+1);}free(name);}}
 int main(int argc,char**argv){signal(SIGINT,SigInt);Runtime r={0};r.interactive=argc==1;ImportEnvironment(&r);const char*path=getenv("PATH");if(path)VarSetRaw(&r.vars,"PATH",path);VarSetRaw(&r.vars,"status","0");setenv("status","0",1);SetScriptArgs(&r,argc,argv);if(argc>1){FILE*f=fopen(argv[1],"rb");if(!f){fprintf(stderr,"cs: %s: %s\n",argv[1],strerror(errno));return 2;}char*s=ReadAll(f);fclose(f);int rc=RunText(&r,s);free(s);return rc;}return Interactive(&r);}
