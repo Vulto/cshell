@@ -12,6 +12,16 @@ static void Fail(const char *message)
     exit(1);
 }
 
+static void ExpectStatusExpansion(void)
+{
+    Runtime runtime = {0};
+    SetStatus(&runtime, 37);
+    char *value = ExpandVariables(&runtime, "$?");
+    if (!value || strcmp(value, "37"))
+        Fail("dollar status expansion failed");
+    free(value);
+}
+
 static void ExpectCompletion(const char *input, const char *expected)
 {
     char buffer[PATH_MAX];
@@ -71,6 +81,7 @@ int main(void)
     dup2(null, STDOUT_FILENO);
     close(null);
 
+    ExpectStatusExpansion();
     ExpectCompletion("cstest", "cstest-command");
     ExpectCompletion("printf x | cstest", "printf x | cstest-command");
     ExpectCompletion("dow", "downloads/");
