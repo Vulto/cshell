@@ -28,4 +28,7 @@ jobs:
           grep -q 'example.cs' /tmp/cs-glob.out
           printf '%s\n' 'alias ll = "echo alias"' 'll' 'history' | ./cs > /tmp/cs-history.out
           grep -q 'alias' /tmp/cs-history.out
+          printf '%s\n' 'echo `echo substituted`' > /tmp/cs-sub.cs
+          ./cs /tmp/cs-sub.cs > /tmp/cs-sub.out
+          grep -qx 'substituted' /tmp/cs-sub.out
           grep -q 'history' /tmp/cs-history.out
