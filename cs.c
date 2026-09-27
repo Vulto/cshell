@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -251,21 +252,319 @@ static char *ReadAll(FILE*f){size_t cap=8192,n=0;char*b=malloc(cap);for(;;){if(n
 static void SigInt(int x){(void)x;(void)write(STDERR_FILENO,"\n",1);}
 static void SetScriptArgs(Runtime*r,int argc,char**argv){char b[64];int count=argc>1?argc-2:0;snprintf(b,sizeof b,"%d",count);VarSetRaw(&r->vars,"argc",b);VarSetRaw(&r->vars,"arg0",argc>1?argv[1]:"cs");for(int i=1;i<=count;i++){snprintf(b,sizeof b,"arg%d",i);VarSetRaw(&r->vars,b,argv[i+1]);}}
 static int RunText(Runtime*r,const char*src){Parser p={0};p.l.s=src;p.l.n=strlen(src);p.l.line=1;p.l.col=1;p.t=Next(&p.l);p.n=Next(&p.l);Stmts s=ParseProgram(&p);for(size_t i=0;i<s.n;i++){if(s.a[i]->k==S_FUNCDEF){Func f=s.a[i]->u.fd.f;bool exists=false;for(size_t j=0;j<r->funcs.n;j++)if(!strcmp(r->funcs.a[j].name,f.name)){exists=true;break;}if(!exists){FPush(&r->funcs,f);memset(&s.a[i]->u.fd.f,0,sizeof(s.a[i]->u.fd.f));}}}Execute(r,&s);for(size_t i=0;i<s.n;i++)FreeStmt(s.a[i]);free(s.a);FreeTok(&p.t);FreeTok(&p.n);return r->flow==FLOW_EXIT?r->returnStatus:r->status;}
-static bool CompletionChar(char c){return isalnum((unsigned char)c)||strchr("_-.+/~",c)!=NULL;}
-static size_t LongestPrefix(char **v,size_t n){if(!n)return 0;size_t p=strlen(v[0]);for(size_t i=1;i<n;i++){size_t j=0;while(j<p&&v[0][j]&&v[i][j]&&v[0][j]==v[i][j])j++;p=j;}return p;}
-static char *CommandCompletion(const char *prefix){
- size_t cap=128,n=0;char **m=calloc(cap,sizeof(*m));const char *builtins[]={"cd","exit","unset","history","alias","unalias"};
- for(size_t i=0;i<sizeof(builtins)/sizeof(builtins[0]);i++)if(!strncmp(builtins[i],prefix,strlen(prefix))){if(n==cap){cap*=2;m=realloc(m,cap*sizeof(*m));}m[n++]=Dup(builtins[i]);}
- const char *path=getenv("PATH");if(path){char *copy=Dup(path),*save=NULL;for(char *dir=strtok_r(copy,":",&save);dir;dir=strtok_r(NULL,":",&save)){if(!*dir)dir=".";DIR*d=opendir(dir);if(!d)continue;struct dirent*e;while((e=readdir(d))){if(strncmp(e->d_name,prefix,strlen(prefix)))continue;char full[PATH_MAX];snprintf(full,sizeof full,"%s/%s",dir,e->d_name);if(access(full,X_OK))continue;bool seen=false;for(size_t k=0;k<n;k++)if(!strcmp(m[k],e->d_name)){seen=true;break;}if(seen)continue;if(n==cap){cap*=2;m=realloc(m,cap*sizeof(*m));}m[n++]=Dup(e->d_name);}closedir(d);}free(copy);}
- if(!n){free(m);return NULL;}size_t p=LongestPrefix(m,n);char*out=DupN(m[0],p);for(size_t k=0;k<n;k++)free(m[k]);free(m);return out;}
-static int CompleteLine(char *buf,size_t *n,size_t cap){
- size_t start=*n;while(start&&CompletionChar(buf[start-1]))start--;size_t len=*n-start;char prefix[PATH_MAX];if(len>=sizeof(prefix))return 0;memcpy(prefix,buf+start,len);prefix[len]=0;
- bool command=true;for(size_t i=0;i<start;i++)if(!isspace((unsigned char)buf[i])){command=false;break;}
- char *completion=NULL;if(command)completion=CommandCompletion(prefix);else{glob_t g={0};char pattern[PATH_MAX];snprintf(pattern,sizeof pattern,"%s*",prefix);if(glob(pattern,0,NULL,&g)==0&&g.gl_pathc==1){const char*p=strrchr(g.gl_pathv[0],'/');completion=Dup(p?p+1:g.gl_pathv[0]);if(strchr(prefix,'/')){free(completion);completion=Dup(g.gl_pathv[0]);}}globfree(&g);}
- if(!completion||strlen(completion)<=len){free(completion);return 0;}size_t add=strlen(completion)-len;if(*n+add+1>=cap){free(completion);return 0;}memcpy(buf+*n,completion+len,add);*n+=add;buf[*n]=0;fwrite(completion+len,1,add,stdout);fflush(stdout);free(completion);return 1;}
-static int ReadInteractiveLine(char *buf,size_t cap){
- struct termios old,raw;if(!isatty(STDIN_FILENO)||tcgetattr(STDIN_FILENO,&old)<0)return fgets(buf,cap,stdin)?(int)strlen(buf):-1;raw=old;raw.c_lflag&=~(ICANON|ECHO);raw.c_cc[VMIN]=1;raw.c_cc[VTIME]=0;if(tcsetattr(STDIN_FILENO,TCSAFLUSH,&raw)<0)return fgets(buf,cap,stdin)?(int)strlen(buf):-1;
- size_t n=0;for(;;){unsigned char c;if(read(STDIN_FILENO,&c,1)!=1){tcsetattr(STDIN_FILENO,TCSAFLUSH,&old);return -1;}if(c=='\r'||c=='\n'){putchar('\n');buf[n]=0;tcsetattr(STDIN_FILENO,TCSAFLUSH,&old);buf[n++]='\n';buf[n]=0;return (int)n;}if(c==3){putchar('^');putchar('C');putchar('\n');n=0;buf[0]=0;tcsetattr(STDIN_FILENO,TCSAFLUSH,&old);return 0;}if(c==127||c=='\b'){if(n){n--;printf("\b \b");fflush(stdout);}continue;}if(c=='\t'){CompleteLine(buf,&n,cap);continue;}if(isprint(c)&&n+1<cap){buf[n++]=(char)c;putchar(c);fflush(stdout);}}
+static size_t CompletionPrefix(char **items, size_t count)
+{
+    if (!count)
+        return 0;
+    size_t n = strlen(items[0]);
+    for (size_t i = 1; i < count; ++i) {
+        size_t j = 0;
+        while (j < n && items[0][j] && items[i][j] &&
+               items[0][j] == items[i][j])
+            ++j;
+        n = j;
+    }
+    return n;
+}
+
+static void CompletionAdd(char ***items, size_t *count, size_t *cap,
+                          const char *value)
+{
+    for (size_t i = 0; i < *count; ++i)
+        if (!strcmp((*items)[i], value))
+            return;
+    if (*count == *cap) {
+        *cap = *cap ? *cap * 2 : 32;
+        *items = realloc(*items, *cap * sizeof(**items));
+        if (!*items)
+            exit(2);
+    }
+    (*items)[(*count)++] = Dup(value);
+}
+
+static void CompletionFree(char **items, size_t count)
+{
+    for (size_t i = 0; i < count; ++i)
+        free(items[i]);
+    free(items);
+}
+
+static char *CommandCompletion(const char *prefix)
+{
+    char **matches = NULL;
+    size_t count = 0, cap = 0;
+    const char *builtins[] = {
+        "cd", "exit", "unset", "history", "alias", "unalias",
+        "jobs", "fg", "bg"
+    };
+
+    for (size_t i = 0; i < sizeof(builtins) / sizeof(*builtins); ++i)
+        if (!strncmp(builtins[i], prefix, strlen(prefix)))
+            CompletionAdd(&matches, &count, &cap, builtins[i]);
+
+    const char *path = getenv("PATH");
+    if (path) {
+        char *copy = Dup(path);
+        char *save = NULL;
+        for (char *dir = strtok_r(copy, ":", &save);
+             dir;
+             dir = strtok_r(NULL, ":", &save)) {
+            if (!*dir)
+                dir = ".";
+            DIR *d = opendir(dir);
+            if (!d)
+                continue;
+            struct dirent *entry;
+            while ((entry = readdir(d))) {
+                if (strncmp(entry->d_name, prefix, strlen(prefix)))
+                    continue;
+                char full[PATH_MAX];
+                int n = snprintf(full, sizeof(full), "%s/%s",
+                                 dir, entry->d_name);
+                if (n < 0 || (size_t)n >= sizeof(full) ||
+                    access(full, X_OK) != 0)
+                    continue;
+                CompletionAdd(&matches, &count, &cap, entry->d_name);
+            }
+            closedir(d);
+        }
+        free(copy);
+    }
+
+    if (!count)
+        return NULL;
+    size_t n = CompletionPrefix(matches, count);
+    char *result = DupN(matches[0], n);
+    CompletionFree(matches, count);
+    return result;
+}
+
+static bool CompletionSeparator(char c)
+{
+    return isspace((unsigned char)c) || c == '|' || c == ';' ||
+           c == '&' || c == '<' || c == '>';
+}
+
+static void CompletionToken(const char *line, size_t end, size_t *start,
+                            char *quote)
+{
+    bool in_quote = false;
+    char active_quote = 0;
+    size_t token_start = 0;
+
+    for (size_t i = 0; i < end; ++i) {
+        char c = line[i];
+        if (in_quote) {
+            if (c == active_quote)
+                in_quote = false;
+            continue;
+        }
+        if (c == '\\' && i + 1 < end) {
+            ++i;
+            continue;
+        }
+        if ((c == '\'' || c == '"') && token_start == i) {
+            in_quote = true;
+            active_quote = c;
+            token_start = i + 1;
+            continue;
+        }
+        if (CompletionSeparator(c))
+            token_start = i + 1;
+    }
+
+    *start = token_start;
+    *quote = in_quote ? active_quote : 0;
+}
+
+static bool CompletionCommandPosition(const char *line, size_t end,
+                                      size_t token_start)
+{
+    bool word = false;
+    bool redirection = false;
+    bool in_quote = false;
+    char quote = 0;
+
+    for (size_t i = 0; i < end; ++i) {
+        char c = line[i];
+        if (in_quote) {
+            if (c == quote)
+                in_quote = false;
+            continue;
+        }
+        if (c == '\\' && i + 1 < end) {
+            ++i;
+            continue;
+        }
+        if (c == '\'' || c == '"') {
+            in_quote = true;
+            quote = c;
+            if (i < token_start)
+                word = true;
+            continue;
+        }
+        if (c == '|' || c == ';' || c == '&') {
+            word = false;
+            redirection = false;
+            continue;
+        }
+        if (c == '<' || c == '>') {
+            redirection = true;
+            continue;
+        }
+        if (!isspace((unsigned char)c) && i < token_start)
+            word = true;
+    }
+
+    return !word && !redirection;
+}
+
+static char *PathCompletion(const char *prefix, char quote)
+{
+    char pattern[PATH_MAX];
+    int n = snprintf(pattern, sizeof(pattern), "%s*", prefix);
+    if (n < 0 || (size_t)n >= sizeof(pattern))
+        return NULL;
+
+    glob_t g = {0};
+    if (glob(pattern, 0, NULL, &g) != 0 || !g.gl_pathc) {
+        globfree(&g);
+        return NULL;
+    }
+
+    char **matches = calloc(g.gl_pathc, sizeof(*matches));
+    if (!matches)
+        exit(2);
+
+    size_t count = 0;
+    for (size_t i = 0; i < g.gl_pathc; ++i) {
+        const char *path = g.gl_pathv[i];
+        if (!quote && strpbrk(path, " \\t\\r\\n"))
+            continue;
+        matches[count++] = Dup(path);
+    }
+    globfree(&g);
+
+    if (!count) {
+        free(matches);
+        return NULL;
+    }
+
+    size_t length = CompletionPrefix(matches, count);
+    char *result = DupN(matches[0], length);
+
+    if (count == 1) {
+        struct stat st;
+        if (stat(matches[0], &st) == 0 && S_ISDIR(st.st_mode) &&
+            length == strlen(matches[0])) {
+            result = realloc(result, length + 2);
+            if (!result)
+                exit(2);
+            result[length] = '/';
+            result[length + 1] = 0;
+        }
+    }
+
+    CompletionFree(matches, count);
+    return result;
+}
+
+static int CompleteLine(char *buf, size_t *n, size_t cap)
+{
+    size_t start = 0;
+    char quote = 0;
+    CompletionToken(buf, *n, &start, &quote);
+    size_t length = *n - start;
+
+    if (length >= PATH_MAX)
+        return 0;
+
+    char prefix[PATH_MAX];
+    memcpy(prefix, buf + start, length);
+    prefix[length] = 0;
+
+    bool command = CompletionCommandPosition(buf, *n, start);
+    char *completion = command
+        ? CommandCompletion(prefix)
+        : PathCompletion(prefix, quote);
+
+    if (!completion || strlen(completion) <= length) {
+        free(completion);
+        return 0;
+    }
+
+    size_t added = strlen(completion) - length;
+    if (*n + added + 1 >= cap) {
+        free(completion);
+        return 0;
+    }
+
+    memcpy(buf + *n, completion + length, added);
+    *n += added;
+    buf[*n] = 0;
+    fwrite(completion + length, 1, added, stdout);
+    fflush(stdout);
+    free(completion);
+    return 1;
+}
+
+static int ReadInteractiveLine(char *buf, size_t cap)
+{
+    struct termios old, raw;
+
+    if (!isatty(STDIN_FILENO) || tcgetattr(STDIN_FILENO, &old) < 0)
+        return fgets(buf, cap, stdin) ? (int)strlen(buf) : -1;
+
+    raw = old;
+    raw.c_lflag &= ~(ICANON | ECHO);
+    raw.c_cc[VMIN] = 1;
+    raw.c_cc[VTIME] = 0;
+
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) < 0)
+        return fgets(buf, cap, stdin) ? (int)strlen(buf) : -1;
+
+    size_t n = 0;
+    for (;;) {
+        unsigned char c;
+        if (read(STDIN_FILENO, &c, 1) != 1) {
+            tcsetattr(STDIN_FILENO, TCSAFLUSH, &old);
+            return -1;
+        }
+        if (c == '\r' || c == '\n') {
+            putchar('\n');
+            buf[n] = 0;
+            tcsetattr(STDIN_FILENO, TCSAFLUSH, &old);
+            buf[n++] = '\n';
+            buf[n] = 0;
+            return (int)n;
+        }
+        if (c == 3) {
+            putchar('^');
+            putchar('C');
+            putchar('\n');
+            n = 0;
+            buf[0] = 0;
+            tcsetattr(STDIN_FILENO, TCSAFLUSH, &old);
+            return 0;
+        }
+        if (c == 127 || c == '\b') {
+            if (n) {
+                --n;
+                printf("\b \b");
+                fflush(stdout);
+            }
+            continue;
+        }
+        if (c == '\t') {
+            CompleteLine(buf, &n, cap);
+            continue;
+        }
+        if (isprint(c) && n + 1 < cap) {
+            buf[n++] = (char)c;
+            putchar(c);
+            fflush(stdout);
+        }
+    }
 }
 static int Interactive(Runtime*r){char*buf=NULL;size_t n=0,cap=0;int depth=0;for(;;){printf(depth?"> ":"cs> ");fflush(stdout);char line[4096];int m=ReadInteractiveLine(line,sizeof line);if(m<0){putchar('\n');break;}if(m==0)continue;size_t lm=(size_t)m;if(n+lm+1>cap){cap=(n+lm+1)*2;buf=realloc(buf,cap);}memcpy(buf+n,line,lm);n+=lm;buf[n]=0;for(size_t k=n-lm;k<n;k++){if(line[k-(n-lm)]=='{')depth++;else if(line[k-(n-lm)]=='}'&&depth>0)depth--;}if(depth||line[lm-1]!='\n')continue;HistoryPush(&r->history,buf);RunText(r,buf);n=0;if(r->flow==FLOW_EXIT){free(buf);return r->returnStatus;}}free(buf);return r->status;}
 extern char **environ;
