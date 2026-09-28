@@ -1,0 +1,76 @@
+name: autonomous-agent
+
+concurrency:
+  group: autonomous-agent
+  cancel-in-progress: false
+
+on:
+  workflow_dispatch:
+  workflow_run:
+    workflows: ["build"]
+    types: [completed]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  agent:
+    if: >
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure Git
+        run: |
+          git config user.name "cshell-autonomous-agent"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Run Codex
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          prompt: |
+            You are the autonomous software-development agent for ${{ github.repository }}.
+
+            Read AGENTS.md completely before acting.
+
+            Make real progress, not merely a report.
+
+            First inspect git status/history, open Issues, open Pull Requests, recent GitHub Actions/CI results, and the current implementation/tests.
+
+            Priority:
+            1. Repair repository CI failures.
+            2. Repair open PRs whose CI is failing.
+            3. Continue an existing Issue with a concrete implementation.
+            4. Create a focused Issue only when a genuine missing task is discovered.
+            5. Otherwise choose a small, high-value improvement supported by the repository direction.
+
+            Rules:
+            - Never commit directly to main.
+            - Use a dedicated branch.
+            - Keep one coherent change per PR.
+            - Use existing Makefile/test commands.
+            - Do not add unnecessary dependencies or abstractions.
+            - Do not introduce C++, Python, Java, JavaScript, Rust, or another build system.
+            - Do not weaken or bypass tests.
+            - Build and test before opening/updating a PR.
+            - Diagnose and repair test failures before opening/updating a PR.
+            - Push the branch and create/update the PR yourself.
+            - Link the PR to its Issue when applicable.
+            - Do not merge PRs.
+
+            If no safe useful implementation can be completed, make no speculative code changes and explain why.
+
+            At the end, report what changed, validation performed, branch/commit/PR, and any blocker.
